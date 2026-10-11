@@ -27,30 +27,25 @@ jobs:
           ${{ runner.os }}-
     - name: Install system packages
       run: sudo apt update && sudo apt install libglib2.0-dev libgtk-3-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-0
-    - name: Run tests
+
+    - name: Run tests (dev)
+      if: github.event.pull_request.merged == false
+      run: cargo test --locked --verbose
+    - name: Run ignored tests (dev)
+      continue-on-error: true
+      if: github.event.pull_request.merged == false
+      run: cargo test --locked --verbose -- --ignored
+
+    - name: Run tests (release)
+      if: github.event.pull_request.merged == true
       run: cargo test --locked --release --verbose
-    - name: Run ignored tests
+    - name: Run ignored tests (release)
+      if: github.event.pull_request.merged == true
       run: cargo test --locked --release --verbose -- --ignored
+
     - name: Build
       run: cargo build --locked --release --verbose
-    - name: Upload executable Linux
-      if: false && runner.os == 'Linux'
-      uses: actions/upload-artifact@v7
-      with:
-        name: rust
-        path: ./target/release/*
-        overwrite: true
-        archive: true
-        if-no-files-found: error
-    - name: Upload executable Windows
-      if: false && runner.os == 'Windows'
-      uses: actions/upload-artifact@v7
-      with:
-        name: rust.exe
-        path: ./target/release/*.exe
-        overwrite: true
-        archive: true
-        if-no-files-found: error
+
     - name: Install clippy
       run: rustup component add clippy
     - name: Clippy
@@ -59,3 +54,22 @@ jobs:
       run: rustup component add rustfmt
     - name: Format
       run: cargo fmt --all -- --check
+
+    - name: Upload executable Linux
+      if: github.ref == 'refs/heads/master' && runner.os == 'Linux'
+      uses: actions/upload-artifact@v7
+      with:
+        name: rust
+        path: ./target/release/*
+        overwrite: true
+        archive: true
+        if-no-files-found: error
+    - name: Upload executable Windows
+      if: github.ref == 'refs/heads/master' && runner.os == 'Windows'
+      uses: actions/upload-artifact@v7
+      with:
+        name: rust.exe
+        path: ./target/release/*.exe
+        overwrite: true
+        archive: true
+        if-no-files-found: error
