@@ -25,6 +25,8 @@ jobs:
           ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           ${{ runner.os }}-cargo-
           ${{ runner.os }}-
+    - name: Install system packages
+      run: sudo apt-get install libglib2.0-dev
     - name: Run tests
       run: cargo test --locked --release --verbose
     - name: Run ignored tests
