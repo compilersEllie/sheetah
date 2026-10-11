@@ -1,5 +1,5 @@
 # Sheetah
 
-## A modern spreadsheets alternative
+## A modern spreadsheet alternative
 
 TBD
