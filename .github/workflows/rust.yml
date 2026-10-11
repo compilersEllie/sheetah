@@ -43,7 +43,11 @@ jobs:
       if: github.event.pull_request.merged == true
       run: cargo test --locked --release --verbose -- --ignored
 
-    - name: Build
+    - name: Build (dev)
+      if: github.event.pull_request.merged == false
+      run: cargo build --locked --verbose
+    - name: Build (release)
+      if: github.event.pull_request.merged == true
       run: cargo build --locked --release --verbose
 
     - name: Install clippy
