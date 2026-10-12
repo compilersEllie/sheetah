@@ -1,14 +1,14 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+pub mod optics;
+pub mod shape;
+pub mod table;
+pub mod table_store;
+pub mod value;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
-    fn it_works() {
-        let result = add(2, 2);
+    fn dummy_test() {
+        let result = 2 + 2;
         assert_eq!(result, 4);
     }
 }
