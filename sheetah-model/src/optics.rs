@@ -14,11 +14,14 @@ pub trait Optic {
     fn name(&self) -> String;
 }
 
+pub type Functor<S, A> = Arc<Box<dyn Fn(S) -> A>>;
+pub type BiFunctor<S, T, A> = Arc<Box<dyn Fn(S, T) -> A>>;
+
 pub struct Iso<S: Value + 'static, A: Value + 'static> {
     // TODO(mem): Use short string optimisation/interning.
     name: String,
-    view_impl: Arc<Box<dyn Fn(S) -> A>>,
-    review_impl: Arc<Box<dyn Fn(A) -> S>>,
+    view_impl: Functor<S, A>,
+    review_impl: Functor<A, S>,
     // TODO(perf): Store all Arc data in a single value to reduce reference
     // counting overhead.
 }
@@ -77,8 +80,8 @@ impl<S: Value + 'static, A: Value + 'static> From<Iso<S, A>> for Prism<S, A> {
 pub struct Lens<S: Value + 'static, A: Value + 'static> {
     // TODO(mem): Use short string optimisation/interning.
     name: String,
-    view_impl: Arc<Box<dyn Fn(S) -> A>>,
-    set_impl: Arc<Box<dyn Fn(S, A) -> S>>,
+    view_impl: Functor<S, A>,
+    set_impl: BiFunctor<S, A, S>,
     // TODO(perf): Store all Arc data in a single value to reduce reference
     // counting overhead.
 }
@@ -127,8 +130,8 @@ impl<S: Value + Clone + 'static, A: Value + 'static> From<Lens<S, A>> for Traver
 pub struct Prism<S: Value + 'static, A: Value + 'static> {
     // TODO(mem): Use short string optimisation/interning.
     name: String,
-    preview_impl: Arc<Box<dyn Fn(S) -> Option<A>>>,
-    review_impl: Arc<Box<dyn Fn(A) -> S>>,
+    preview_impl: Functor<S, Option<A>>,
+    review_impl: Functor<A, S>,
     // TODO(perf): Store all Arc data in a single value to reduce reference
     // counting overhead.
 }
@@ -165,13 +168,10 @@ impl<S: Value + 'static, A: Value + 'static> From<Prism<S, A>> for Traversal<S, 
                 },
                 None => vec![],
             })),
-            over_impl: Arc::new(Box::new(move |f, source| match source {
-                Some(value) => match (val_preview2)(value) {
-                    Some(inner) => Some((val_review)(f(inner))),
-                    None => None,
-                },
-                None => None,
-            })),
+            over_impl: Arc::new(Box::new(move |f, source| source.and_then(|value|
+                (val_preview2)(value).map(|inner| (val_review)(f(inner))
+            ))
+                       ))
         }
     }
 }
@@ -179,8 +179,8 @@ impl<S: Value + 'static, A: Value + 'static> From<Prism<S, A>> for Traversal<S, 
 pub struct Traversal<S: Value + 'static, A: Value + 'static> {
     // TODO(mem): Use short string optimisation/interning.
     name: String,
-    to_list_impl: Arc<Box<dyn Fn(Option<S>) -> Vec<A>>>,
-    over_impl: Arc<Box<dyn Fn(&dyn Fn(A) -> A, Option<S>) -> Option<S>>>,
+    to_list_impl: Functor<Option<S>, Vec<A>>,
+    over_impl: BiFunctor<Functor<A, A>, Option<S>, Option<S>>,
     // TODO(perf): Store all Arc data in a single value to reduce reference
     // counting overhead.
 }
@@ -189,7 +189,7 @@ impl<S: Value + 'static, A: Value + 'static> Traversal<S, A> {
     fn to_list(&self, source: Option<S>) -> Vec<A> {
         (self.to_list_impl)(source)
     }
-    fn over(&self, f: &dyn Fn(A) -> A, source: Option<S>) -> Option<S> {
+    fn over(&self, f: Functor<A, A>, source: Option<S>) -> Option<S> {
         (self.over_impl)(f, source)
     }
 }
@@ -206,8 +206,8 @@ impl<S: Value + 'static, A: Value + 'static> Optic for Traversal<S, A> {
 pub struct Affine<S: Value + 'static, A: Value + 'static> {
     // TODO(mem): Use short string optimisation/interning.
     name: String,
-    to_list_impl: Arc<Box<dyn Fn(Option<S>) -> Option<A>>>,
-    over_impl: Arc<Box<dyn Fn(&dyn Fn(A) -> A, Option<S>) -> Option<S>>>,
+    to_list_impl: Functor<Option<S>, Option<A>>,
+    over_impl: BiFunctor<Functor<A, A>, Option<S>, Option<S>>,
     // TODO(perf): Store all Arc data in a single value to reduce reference
     // counting overhead.
 }
@@ -216,7 +216,7 @@ impl<S: Value + 'static, A: Value + 'static> Affine<S, A> {
     fn to_list(&self, source: Option<S>) -> Option<A> {
         (self.to_list_impl)(source)
     }
-    fn over(&self, f: &dyn Fn(A) -> A, source: Option<S>) -> Option<S> {
+    fn over(&self, f: Functor<A, A>, source: Option<S>) -> Option<S> {
         (self.over_impl)(f, source)
     }
 }
