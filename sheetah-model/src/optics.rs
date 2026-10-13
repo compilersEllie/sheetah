@@ -33,11 +33,11 @@ impl<S: Value + 'static, A: Value + 'static> Iso<S, A> {
     }
 
     fn flip(&self) -> Iso<A, S> {
-      Iso {
-        name: format!("undo {}", self.name()),
-        view_impl: self.review_impl.clone(),
-        review_impl: self.view_impl.clone(),
-      }
+        Iso {
+            name: format!("undo {}", self.name()),
+            view_impl: self.review_impl.clone(),
+            review_impl: self.view_impl.clone(),
+        }
     }
 }
 
@@ -50,26 +50,26 @@ impl<S: Value + 'static, A: Value + 'static> Optic for Iso<S, A> {
     }
 }
 
-impl<S: Value + 'static, A: Value + 'static> Into<Lens<S, A>> for Iso<S, A> {
-    fn into(self) -> Lens<S, A> {
-        let self_view = self.view_impl.clone();
-        let self_review = self.review_impl.clone();
+impl<S: Value + 'static, A: Value + 'static> From<Iso<S, A>> for Lens<S, A> {
+    fn from(val: Iso<S, A>) -> Lens<S, A> {
+        let val_view = val.view_impl.clone();
+        let val_review = val.review_impl.clone();
         Lens {
-            name: self.name,
-            view_impl: self_view,
-            set_impl: Arc::new(Box::new(move |_old, value| (self_review)(value))),
+            name: val.name,
+            view_impl: val_view,
+            set_impl: Arc::new(Box::new(move |_old, value| (val_review)(value))),
         }
     }
 }
 
-impl<S: Value + 'static, A: Value + 'static> Into<Prism<S, A>> for Iso<S, A> {
-    fn into(self) -> Prism<S, A> {
-        let self_view = self.view_impl.clone();
-        let self_review = self.review_impl.clone();
+impl<S: Value + 'static, A: Value + 'static> From<Iso<S, A>> for Prism<S, A> {
+    fn from(val: Iso<S, A>) -> Prism<S, A> {
+        let val_view = val.view_impl.clone();
+        let val_review = val.review_impl.clone();
         Prism {
-            name: self.name,
-            preview_impl: Arc::new(Box::new(move |value| Some((self_view)(value)))),
-            review_impl: self_review,
+            name: val.name,
+            preview_impl: Arc::new(Box::new(move |value| Some((val_view)(value)))),
+            review_impl: val_review,
         }
     }
 }
@@ -101,22 +101,22 @@ impl<S: Value + 'static, A: Value + 'static> Optic for Lens<S, A> {
     }
 }
 
-impl<S: Value + Clone + 'static, A: Value + 'static> Into<Traversal<S, A>> for Lens<S, A> {
-    fn into(self) -> Traversal<S, A> {
-        let self_view1 = self.view_impl.clone();
-        let self_view2 = self.view_impl.clone();
-        let self_set = self.set_impl.clone();
+impl<S: Value + Clone + 'static, A: Value + 'static> From<Lens<S, A>> for Traversal<S, A> {
+    fn from(val: Lens<S, A>) -> Traversal<S, A> {
+        let val_view1 = val.view_impl.clone();
+        let val_view2 = val.view_impl.clone();
+        let val_set = val.set_impl.clone();
         Traversal {
-            name: self.name,
+            name: val.name,
             to_list_impl: Arc::new(Box::new(move |source| match source {
-                Some(value) => vec![(self_view1)(value)],
+                Some(value) => vec![(val_view1)(value)],
                 None => vec![],
             })),
             over_impl: Arc::new(Box::new(move |f, source| match source {
                 Some(value) => {
-                  let new_field = f((self_view2)(value.clone()));
-                  let new_value = (self_set)(value, new_field);
-                  Some(new_value)
+                    let new_field = f((val_view2)(value.clone()));
+                    let new_value = (val_set)(value, new_field);
+                    Some(new_value)
                 }
                 None => None,
             })),
@@ -151,23 +151,23 @@ impl<S: Value + 'static, A: Value + 'static> Optic for Prism<S, A> {
     }
 }
 
-impl<S: Value + 'static, A: Value + 'static> Into<Traversal<S, A>> for Prism<S, A> {
-    fn into(self) -> Traversal<S, A> {
-        let self_preview1 = self.preview_impl.clone();
-        let self_preview2 = self.preview_impl.clone();
-        let self_review = self.review_impl.clone();
+impl<S: Value + 'static, A: Value + 'static> From<Prism<S, A>> for Traversal<S, A> {
+    fn from(val: Prism<S, A>) -> Traversal<S, A> {
+        let val_preview1 = val.preview_impl.clone();
+        let val_preview2 = val.preview_impl.clone();
+        let val_review = val.review_impl.clone();
         Traversal {
-            name: self.name,
+            name: val.name,
             to_list_impl: Arc::new(Box::new(move |source| match source {
-                Some(value) => match (self_preview1)(value) {
+                Some(value) => match (val_preview1)(value) {
                     Some(mapped) => vec![mapped],
                     None => vec![],
                 },
                 None => vec![],
             })),
             over_impl: Arc::new(Box::new(move |f, source| match source {
-                Some(value) => match (self_preview2)(value) {
-                    Some(inner) => Some((self_review)(inner)),
+                Some(value) => match (val_preview2)(value) {
+                    Some(inner) => Some((val_review)(f(inner))),
                     None => None,
                 },
                 None => None,
@@ -230,16 +230,16 @@ impl<S: Value + 'static, A: Value + 'static> Optic for Affine<S, A> {
     }
 }
 
-impl<S: Value + 'static, A: Value + 'static> Into<Traversal<S, A>> for Affine<S, A> {
-    fn into(self) -> Traversal<S, A> {
-        let self_to_list = self.to_list_impl.clone();
+impl<S: Value + 'static, A: Value + 'static> From<Affine<S, A>> for Traversal<S, A> {
+    fn from(val: Affine<S, A>) -> Traversal<S, A> {
+        let val_to_list = val.to_list_impl.clone();
         Traversal {
-            name: self.name,
-            to_list_impl: Arc::new(Box::new(move |source| match (self_to_list)(source) {
-                Some(value) => vec![],
+            name: val.name,
+            to_list_impl: Arc::new(Box::new(move |source| match (val_to_list)(source) {
+                Some(value) => vec![value],
                 None => vec![],
             })),
-            over_impl: self.over_impl,
+            over_impl: val.over_impl,
         }
     }
 }
@@ -267,12 +267,10 @@ impl<A: Value, B: Value, C: Value> Compose<Iso<B, C>> for Iso<A, B> {
         let other_review = other.review_impl.clone();
         Iso {
             name: self.make_name(other),
-            view_impl: Arc::new(Box::new(
-                  move |source| (other_view)((self_view)(source))
-            )),
-            review_impl: Arc::new(Box::new(
-                  move |source| (self_review)((other_review)(source))
-            )),
+            view_impl: Arc::new(Box::new(move |source| (other_view)((self_view)(source)))),
+            review_impl: Arc::new(Box::new(move |source| {
+                (self_review)((other_review)(source))
+            })),
         }
     }
 }
@@ -285,22 +283,16 @@ impl<A: Value + Clone + 'static, B: Value + Clone, C: Value> Compose<Lens<B, C>>
         let self_view2 = self.view_impl.clone();
         let self_set = self.set_impl.clone();
         let other_view1 = other.view_impl.clone();
-        let other_view2 = other.view_impl.clone();
         let other_set = other.set_impl.clone();
         Lens {
             name: self.make_name(other),
-            view_impl: Arc::new(Box::new(
-                  move |source| (other_view1)((self_view1)(source))
-            )),
-            set_impl: Arc::new(Box::new(
-                  move |source, new_subfield| {
-                    let field = (self_view2)(source.clone());
-                    let subfield = (other_view2)(field.clone());
-                    // TODO: Avoid the clone here with a "take" method or Arc.
-                    let new_field = (other_set)(field, new_subfield);
-                    self_set(source, new_field)
-                  }
-            )),
+            view_impl: Arc::new(Box::new(move |source| (other_view1)((self_view1)(source)))),
+            set_impl: Arc::new(Box::new(move |source, new_subfield| {
+                let field: B = (self_view2)(source.clone());
+                // TODO: Avoid the clone here with a "take" method or Arc.
+                let new_field = (other_set)(field, new_subfield);
+                self_set(source, new_field)
+            })),
         }
     }
 }
