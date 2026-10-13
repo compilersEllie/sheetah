@@ -1,10 +1,7 @@
-use crate::optics::OpticId;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::any::{Any, TypeId};
-use std::error::Error;
+use std::any::TypeId;
 use std::fmt::Debug;
 
-// pub trait Value: Debug {
+#[typetag::serde(tag = "type")]
 pub trait Value: Debug {
     // TODO: Add localisation support
     fn name(&self) -> String;
@@ -21,12 +18,9 @@ pub trait Value: Debug {
             chosen_format: None,
         }
     }
-
-    // TODO: Implement
-    // fn serialize(&self, serializer: dyn Serializer) -> Result<dyn Any, dyn Error>;
-    // fn deserialize(deserializer: dyn for <'a> Deserializer<'a>) -> Result<dyn Value, dyn Error>;
 }
 
+#[typetag::serde]
 impl Value for i32 {
     fn name(&self) -> String {
         "integer (i32)".to_string()
@@ -37,6 +31,7 @@ impl Value for i32 {
     }
 }
 
+#[typetag::serde]
 impl Value for f32 {
     fn name(&self) -> String {
         "decimal (f32)".to_string()
@@ -47,6 +42,7 @@ impl Value for f32 {
     }
 }
 
+#[typetag::serde]
 impl Value for String {
     fn name(&self) -> String {
         "text".to_string()
@@ -57,7 +53,19 @@ impl Value for String {
     }
 }
 
-impl<V: Value + Clone + 'static> Value for Option<V> {
+#[typetag::serde]
+impl Value for Box<dyn Value> {
+    fn name(&self) -> String {
+        format!("{}", (*self).name())
+    }
+
+    fn cloned(&self) -> Box<dyn Value> {
+        Box::new(self.cloned())
+    }
+}
+
+#[typetag::serde]
+impl Value for Option<Box<dyn Value>> {
     fn name(&self) -> String {
         match self {
             Some(v) => format!("some {}", v.name()),
@@ -66,7 +74,7 @@ impl<V: Value + Clone + 'static> Value for Option<V> {
     }
 
     fn cloned(&self) -> Box<dyn Value> {
-        Box::new(self.clone())
+        Box::new(self.cloned())
     }
 }
 

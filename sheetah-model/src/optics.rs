@@ -7,7 +7,7 @@ pub struct OpticId {
 }
 
 // TODO(perf): Look into type safe type level patterns with PolyMap
-trait Optic {
+pub trait Optic {
     type In: Value;
     type Out: Value;
 
