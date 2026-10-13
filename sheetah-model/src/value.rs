@@ -1,15 +1,15 @@
-use std::any::TypeId;
+use std::any::{Any, TypeId};
 use std::fmt::Debug;
 
 #[typetag::serde(tag = "type")]
-pub trait Value: Debug {
+pub trait Value: Debug + 'static {
     // TODO: Add localisation support
     fn name(&self) -> String;
 
     fn cloned(&self) -> Box<dyn Value>;
 
     fn type_id(&self) -> TypeId {
-        self.type_id()
+        Any::type_id(self)
     }
 
     fn make_info(&self) -> ValueInfo {
@@ -56,11 +56,11 @@ impl Value for String {
 #[typetag::serde]
 impl Value for Box<dyn Value> {
     fn name(&self) -> String {
-        format!("{}", (*self).name())
+        format!("{}", (self as &dyn Value).name())
     }
 
     fn cloned(&self) -> Box<dyn Value> {
-        Box::new(self.cloned())
+        Box::new((self as &dyn Value).cloned())
     }
 }
 
@@ -74,7 +74,7 @@ impl Value for Option<Box<dyn Value>> {
     }
 
     fn cloned(&self) -> Box<dyn Value> {
-        Box::new(self.cloned())
+        Box::new((self as &dyn Value).cloned())
     }
 }
 
