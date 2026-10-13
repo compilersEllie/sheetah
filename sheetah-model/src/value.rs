@@ -27,7 +27,7 @@ impl Value for i32 {
     }
 
     fn cloned(&self) -> Box<dyn Value> {
-        Box::new(self.clone())
+        Box::new(*self)
     }
 }
 
@@ -38,7 +38,7 @@ impl Value for f32 {
     }
 
     fn cloned(&self) -> Box<dyn Value> {
-        Box::new(self.clone())
+        Box::new(*self)
     }
 }
 
@@ -56,7 +56,7 @@ impl Value for String {
 #[typetag::serde]
 impl Value for Box<dyn Value> {
     fn name(&self) -> String {
-        format!("{}", (self as &dyn Value).name())
+        (self as &dyn Value).name()
     }
 
     fn cloned(&self) -> Box<dyn Value> {
