@@ -27,6 +27,18 @@ pub struct Iso<S: Value + 'static, A: Value + 'static> {
 }
 
 impl<S: Value + 'static, A: Value + 'static> Iso<S, A> {
+    fn new(
+        name: impl Into<String>,
+        view_impl: impl Fn(S) -> A + 'static,
+        review_impl: impl Fn(A) -> S + 'static,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            view_impl: Arc::new(Box::new(view_impl)),
+            review_impl: Arc::new(Box::new(review_impl)),
+        }
+    }
+
     fn view(&self, value: S) -> A {
         (self.view_impl)(value)
     }
@@ -168,10 +180,9 @@ impl<S: Value + 'static, A: Value + 'static> From<Prism<S, A>> for Traversal<S, 
                 },
                 None => vec![],
             })),
-            over_impl: Arc::new(Box::new(move |f, source| source.and_then(|value|
-                (val_preview2)(value).map(|inner| (val_review)(f(inner))
-            ))
-                       ))
+            over_impl: Arc::new(Box::new(move |f, source| {
+                source.and_then(|value| (val_preview2)(value).map(|inner| (val_review)(f(inner))))
+            })),
         }
     }
 }
