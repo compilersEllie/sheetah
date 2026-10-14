@@ -1,4 +1,5 @@
 use crate::optics::OpticId;
+use stable_hash::impl_stable_hash;
 use std::any::{Any, TypeId};
 use std::fmt::Debug;
 
@@ -93,6 +94,11 @@ pub struct ValueInfo {
     name: String,
     chosen_format: Option<OpticId>,
 }
+
+impl_stable_hash!(ValueInfo {
+    name,
+    chosen_format
+});
 
 impl ValueInfo {
     pub fn name(&self) -> &str {

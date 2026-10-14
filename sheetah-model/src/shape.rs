@@ -1,4 +1,5 @@
 use crate::value::ValueInfo;
+use stable_hash::{FieldAddress, StableHash, StableHasher, impl_stable_hash};
 
 pub type ColumnIndex = u32;
 
@@ -8,11 +9,28 @@ pub enum SortOrder {
     Descending,
 }
 
-#[derive(Clone, Debug)]
+impl StableHash for SortOrder {
+    fn stable_hash<H: StableHasher>(&self, field_address: H::Addr, state: &mut H) {
+        match self {
+            SortOrder::Ascending => {
+                1.stable_hash(field_address.child(0), state);
+                state.write(field_address, &[]);
+            }
+            SortOrder::Descending => { /* no effect */ }
+        }
+    }
+}
+
+#[derive(Default, Clone, Debug)]
 pub struct Shape {
     columns: Vec<ColumnInfo>,
     sort_order: Vec<(ColumnIndex, SortOrder)>,
 }
+
+impl_stable_hash!(Shape {
+    columns,
+    sort_order
+});
 
 impl Shape {
     pub fn add_column(&mut self, index: ColumnIndex, col: ColumnInfo) {
@@ -39,6 +57,8 @@ pub struct ColumnInfo {
     name: Option<String>,
     kind: ValueInfo,
 }
+
+impl_stable_hash!(ColumnInfo { name, kind });
 
 impl ColumnInfo {
     pub fn name(&mut self) -> &str {

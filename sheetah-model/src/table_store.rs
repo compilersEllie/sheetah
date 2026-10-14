@@ -7,6 +7,17 @@ pub struct TableStore {
 }
 
 impl TableStore {
+    pub fn insert(&mut self, table: Table) {
+        let id = table.id();
+        self.table_cache.insert(id, table);
+    }
+
+    pub fn insert_named(&mut self, name: TableName, table: Table) {
+        let id = table.id();
+        self.named_tables.insert(name, id);
+        self.insert(table)
+    }
+
     pub fn get(&self, id: TableId) -> Option<&Table> {
         self.table_cache.get(&id)
     }
