@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub struct OpticId {
-    id: u128,
+    pub id: u128,
 }
 
 // TODO(perf): Look into type safe type level patterns with PolyMap
@@ -27,7 +27,7 @@ pub struct Iso<S: Value + 'static, A: Value + 'static> {
 }
 
 impl<S: Value + 'static, A: Value + 'static> Iso<S, A> {
-    fn new(
+    pub fn new(
         name: impl Into<String>,
         view_impl: impl Fn(S) -> A + 'static,
         review_impl: impl Fn(A) -> S + 'static,
@@ -39,15 +39,15 @@ impl<S: Value + 'static, A: Value + 'static> Iso<S, A> {
         }
     }
 
-    fn view(&self, value: S) -> A {
+    pub fn view(&self, value: S) -> A {
         (self.view_impl)(value)
     }
 
-    fn review(&self, value: A) -> S {
+    pub fn review(&self, value: A) -> S {
         (self.review_impl)(value)
     }
 
-    fn flip(&self) -> Iso<A, S> {
+    pub fn flip(&self) -> Iso<A, S> {
         Iso {
             name: format!("undo {}", self.name()),
             view_impl: self.review_impl.clone(),
@@ -99,7 +99,7 @@ pub struct Lens<S: Value + 'static, A: Value + 'static> {
 }
 
 impl<S: Value + 'static, A: Value + 'static> Lens<S, A> {
-    fn new(
+    pub fn new(
         name: impl Into<String>,
         view_impl: impl Fn(S) -> A + 'static,
         set_impl: impl Fn(S, A) -> S + 'static,
@@ -110,10 +110,10 @@ impl<S: Value + 'static, A: Value + 'static> Lens<S, A> {
             set_impl: Arc::new(Box::new(set_impl)),
         }
     }
-    fn view(&self, source: S) -> A {
+    pub fn view(&self, source: S) -> A {
         (self.view_impl)(source)
     }
-    fn set(&self, old_source: S, field: A) -> S {
+    pub fn set(&self, old_source: S, field: A) -> S {
         (self.set_impl)(old_source, field)
     }
 }
@@ -160,7 +160,7 @@ pub struct Prism<S: Value + 'static, A: Value + 'static> {
 }
 
 impl<S: Value + 'static, A: Value + 'static> Prism<S, A> {
-    fn new(
+    pub fn new(
         name: impl Into<String>,
         preview_impl: impl Fn(S) -> Option<A> + 'static,
         review_impl: impl Fn(A) -> S + 'static,
@@ -171,10 +171,10 @@ impl<S: Value + 'static, A: Value + 'static> Prism<S, A> {
             review_impl: Arc::new(Box::new(review_impl)),
         }
     }
-    fn preview(&self, source: S) -> Option<A> {
+    pub fn preview(&self, source: S) -> Option<A> {
         (self.preview_impl)(source)
     }
-    fn review(&self, source: A) -> S {
+    pub fn review(&self, source: A) -> S {
         (self.review_impl)(source)
     }
 }
@@ -219,7 +219,7 @@ pub struct Traversal<S: Value + 'static, A: Value + 'static> {
 }
 
 impl<S: Value + 'static, A: Value + 'static> Traversal<S, A> {
-    fn new(
+    pub fn new(
         name: impl Into<String>,
         to_list_impl: impl Fn(Option<S>) -> Vec<A> + 'static,
         over_impl: impl Fn(Functor<A, A>, Option<S>) -> Option<S> + 'static,
@@ -230,10 +230,10 @@ impl<S: Value + 'static, A: Value + 'static> Traversal<S, A> {
             over_impl: Arc::new(Box::new(over_impl)),
         }
     }
-    fn to_list(&self, source: Option<S>) -> Vec<A> {
+    pub fn to_list(&self, source: Option<S>) -> Vec<A> {
         (self.to_list_impl)(source)
     }
-    fn over(&self, f: Functor<A, A>, source: Option<S>) -> Option<S> {
+    pub fn over(&self, f: Functor<A, A>, source: Option<S>) -> Option<S> {
         (self.over_impl)(f, source)
     }
 }
@@ -257,7 +257,7 @@ pub struct Affine<S: Value + 'static, A: Value + 'static> {
 }
 
 impl<S: Value + 'static, A: Value + 'static> Affine<S, A> {
-    fn new(
+    pub fn new(
         name: impl Into<String>,
         to_list_impl: impl Fn(Option<S>) -> Option<A> + 'static,
         over_impl: impl Fn(Functor<A, A>, Option<S>) -> Option<S> + 'static,
@@ -268,10 +268,10 @@ impl<S: Value + 'static, A: Value + 'static> Affine<S, A> {
             over_impl: Arc::new(Box::new(over_impl)),
         }
     }
-    fn to_list(&self, source: Option<S>) -> Option<A> {
+    pub fn to_list(&self, source: Option<S>) -> Option<A> {
         (self.to_list_impl)(source)
     }
-    fn over(&self, f: Functor<A, A>, source: Option<S>) -> Option<S> {
+    pub fn over(&self, f: Functor<A, A>, source: Option<S>) -> Option<S> {
         (self.over_impl)(f, source)
     }
 }
