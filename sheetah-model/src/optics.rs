@@ -307,3 +307,41 @@ impl<A: Value + Clone + 'static, B: Value + Clone, C: Value> Compose<Lens<B, C>>
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn add_two_iso() {
+        let a = Iso::new("add2", |n| n + 2, |n| n - 2);
+        for x in 0..4 {
+            assert_eq!(a.view(x), x + 2);
+            assert_eq!(a.review(a.view(x)), x);
+        }
+    }
+
+    #[test]
+    fn compose_iso() {
+        let a = Iso::new("add2", |n| n + 2, |n| n - 2);
+        let b = Iso::new("times2", |n| n * 2, |n| n / 2);
+        let c = a.and_then(b);
+        for x in 0..4 {
+            assert_eq!(c.view(x), (x + 2) * 2);
+            assert_eq!(c.review(c.view(x)), x);
+        }
+    }
+
+    #[test]
+    fn modify_retains_update() {
+        let a = Iso::new("add2", |n| n + 2, |n| n - 2);
+        let b = Iso::new("times2", |n| n * 2, |n| n / 2);
+        let c = a.and_then(b);
+        for x in 0..4 {
+            let mut v = x;
+            let res = c.view(v)+2;
+            v = c.review(res);
+            assert_eq!(c.view(v), res);
+        }
+    }
+}
