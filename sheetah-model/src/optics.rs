@@ -99,6 +99,17 @@ pub struct Lens<S: Value + 'static, A: Value + 'static> {
 }
 
 impl<S: Value + 'static, A: Value + 'static> Lens<S, A> {
+    fn new(
+        name: impl Into<String>,
+        view_impl: impl Fn(S) -> A + 'static,
+        set_impl: impl Fn(S, A) -> S + 'static,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            view_impl: Arc::new(Box::new(view_impl)),
+            set_impl: Arc::new(Box::new(set_impl)),
+        }
+    }
     fn view(&self, source: S) -> A {
         (self.view_impl)(source)
     }
@@ -149,6 +160,17 @@ pub struct Prism<S: Value + 'static, A: Value + 'static> {
 }
 
 impl<S: Value + 'static, A: Value + 'static> Prism<S, A> {
+    fn new(
+        name: impl Into<String>,
+        preview_impl: impl Fn(S) -> Option<A> + 'static,
+        review_impl: impl Fn(A) -> S + 'static,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            preview_impl: Arc::new(Box::new(preview_impl)),
+            review_impl: Arc::new(Box::new(review_impl)),
+        }
+    }
     fn preview(&self, source: S) -> Option<A> {
         (self.preview_impl)(source)
     }
@@ -197,6 +219,17 @@ pub struct Traversal<S: Value + 'static, A: Value + 'static> {
 }
 
 impl<S: Value + 'static, A: Value + 'static> Traversal<S, A> {
+    fn new(
+        name: impl Into<String>,
+        to_list_impl: impl Fn(Option<S>) -> Vec<A> + 'static,
+        over_impl: impl Fn(Functor<A, A>, Option<S>) -> Option<S> + 'static,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            to_list_impl: Arc::new(Box::new(to_list_impl)),
+            over_impl: Arc::new(Box::new(over_impl)),
+        }
+    }
     fn to_list(&self, source: Option<S>) -> Vec<A> {
         (self.to_list_impl)(source)
     }
@@ -224,6 +257,17 @@ pub struct Affine<S: Value + 'static, A: Value + 'static> {
 }
 
 impl<S: Value + 'static, A: Value + 'static> Affine<S, A> {
+    fn new(
+        name: impl Into<String>,
+        to_list_impl: impl Fn(Option<S>) -> Option<A> + 'static,
+        over_impl: impl Fn(Functor<A, A>, Option<S>) -> Option<S> + 'static,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            to_list_impl: Arc::new(Box::new(to_list_impl)),
+            over_impl: Arc::new(Box::new(over_impl)),
+        }
+    }
     fn to_list(&self, source: Option<S>) -> Option<A> {
         (self.to_list_impl)(source)
     }
@@ -339,7 +383,7 @@ mod tests {
         let c = a.and_then(b);
         for x in 0..4 {
             let mut v = x;
-            let res = c.view(v)+2;
+            let res = c.view(v) + 2;
             v = c.review(res);
             assert_eq!(c.view(v), res);
         }
