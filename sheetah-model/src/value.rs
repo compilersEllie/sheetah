@@ -23,6 +23,28 @@ pub trait Value: Debug + 'static {
 }
 
 #[typetag::serde]
+impl Value for i8 {
+    fn name(&self) -> String {
+        "integer (i8)".to_string()
+    }
+
+    fn cloned(&self) -> Box<dyn Value> {
+        Box::new(*self)
+    }
+}
+
+#[typetag::serde]
+impl Value for i16 {
+    fn name(&self) -> String {
+        "integer (i16)".to_string()
+    }
+
+    fn cloned(&self) -> Box<dyn Value> {
+        Box::new(*self)
+    }
+}
+
+#[typetag::serde]
 impl Value for i32 {
     fn name(&self) -> String {
         "integer (i32)".to_string()
@@ -34,9 +56,42 @@ impl Value for i32 {
 }
 
 #[typetag::serde]
+impl Value for i64 {
+    fn name(&self) -> String {
+        "integer (i32)".to_string()
+    }
+
+    fn cloned(&self) -> Box<dyn Value> {
+        Box::new(*self)
+    }
+}
+
+#[typetag::serde]
+impl Value for i128 {
+    fn name(&self) -> String {
+        "integer (i128)".to_string()
+    }
+
+    fn cloned(&self) -> Box<dyn Value> {
+        Box::new(*self)
+    }
+}
+
+#[typetag::serde]
 impl Value for f32 {
     fn name(&self) -> String {
         "decimal (f32)".to_string()
+    }
+
+    fn cloned(&self) -> Box<dyn Value> {
+        Box::new(*self)
+    }
+}
+
+#[typetag::serde]
+impl Value for f64 {
+    fn name(&self) -> String {
+        "decimal (f64)".to_string()
     }
 
     fn cloned(&self) -> Box<dyn Value> {
@@ -80,7 +135,6 @@ impl Value for Option<Box<dyn Value>> {
     }
 }
 
-// TODO: Add more number types
 // TODO: Add a geneic "number" / bignumber
 // TODO: Add big text
 // TODO: Add short string optimisation
@@ -103,10 +157,6 @@ impl_stable_hash!(ValueInfo {
 impl ValueInfo {
     pub fn name(&self) -> &str {
         &self.name
-    }
-
-    pub fn set_name(&mut self, name: String) {
-        self.name = name;
     }
 
     pub fn format(&self) -> &Option<OpticId> {
