@@ -1,8 +1,8 @@
 use crate::optics::OpticId;
 use crate::shape::Shape;
+use byteorder::{BigEndian, ByteOrder};
 use stable_hash::{StableHash, StableHasher, crypto::CryptoStableHasher, impl_stable_hash};
 use std::collections::HashMap;
-use byteorder::{BigEndian, ByteOrder};
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct TableName {
