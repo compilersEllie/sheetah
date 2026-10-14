@@ -2,6 +2,7 @@ use crate::optics::OpticId;
 use crate::shape::Shape;
 use stable_hash::{StableHash, StableHasher, crypto::CryptoStableHasher, impl_stable_hash};
 use std::collections::HashMap;
+use byteorder::{BigEndian, ByteOrder};
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct TableName {
@@ -49,11 +50,7 @@ impl Table {
         let mut hasher = CryptoStableHasher::new();
         self.stable_hash(stable_hash::FieldAddress::root(), &mut hasher);
         let hash = hasher.finish();
-        let mut id = 0u128;
-        for h in hash {
-            id <<= 32;
-            id += h as u128;
-        }
+        let id = BigEndian::read_u128(&hash);
         TableId { id }
     }
 }

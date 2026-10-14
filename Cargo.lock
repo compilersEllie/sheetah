@@ -5259,6 +5259,7 @@ dependencies = [
 name = "sheetah-model"
 version = "0.1.0"
 dependencies = [
+ "byteorder",
  "inventory",
  "platform-dirs",
  "postcard",
