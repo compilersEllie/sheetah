@@ -1,3 +1,4 @@
+use crate::optics::OpticId;
 use std::any::{Any, TypeId};
 use std::fmt::Debug;
 
@@ -90,5 +91,27 @@ impl Value for Option<Box<dyn Value>> {
 #[derive(Clone, Debug)]
 pub struct ValueInfo {
     name: String,
-    chosen_format: Option<u32>, // index
+    chosen_format: Option<OpticId>,
+}
+
+impl ValueInfo {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn set_name(&mut self, name: String) {
+        self.name = name;
+    }
+
+    pub fn format(&self) -> &Option<OpticId> {
+        &self.chosen_format
+    }
+
+    pub fn set_format(&mut self, format: OpticId) {
+        self.chosen_format = Some(format);
+    }
+
+    pub fn reset_format(&mut self) {
+        self.chosen_format = None;
+    }
 }
