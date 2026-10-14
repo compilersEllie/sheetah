@@ -1,10 +1,13 @@
 use crate::value::Value;
+use stable_hash::impl_stable_hash;
 use std::sync::Arc;
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct OpticId {
     pub id: u128,
 }
+
+impl_stable_hash!(OpticId { id });
 
 // TODO(perf): Look into type safe type level patterns with PolyMap
 pub trait Optic {
