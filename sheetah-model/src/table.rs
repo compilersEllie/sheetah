@@ -31,8 +31,10 @@ impl TableId {
 
 #[derive(Default, Clone, Debug)]
 pub struct Table {
+    /// The table may have a user facing namee or may be anonyymous.
     name: Option<TableName>,
-    sources: HashMap<TableName, TableId>,
+    /// For tracking dependencies and propagating updates.
+    dependencies: HashMap<TableName, TableId>,
     // Should be per column.
     derivation: Vec<OpticId>,
     shape: Shape,
@@ -40,7 +42,7 @@ pub struct Table {
 
 impl_stable_hash!(Table {
     name,
-    sources,
+    dependencies,
     derivation,
     shape
 });
@@ -52,5 +54,9 @@ impl Table {
         let hash = hasher.finish();
         let id = BigEndian::read_u128(&hash);
         TableId { id }
+    }
+
+    pub fn name(&self) -> &Option<TableName> {
+        &self.name
     }
 }
