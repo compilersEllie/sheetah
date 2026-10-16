@@ -3,7 +3,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct BackendOptions {
