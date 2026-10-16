@@ -1,8 +1,9 @@
 use crate::backend::{Backend, BackendKind, BackendOptions};
-use crate::table::{TableId, TableName};
+use crate::table::{Table, TableId, TableName};
 use anyhow::{Result, bail};
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 #[derive(Default)]
 pub struct Workspace {
@@ -21,7 +22,7 @@ impl Workspace {
         let mut this = Self::default();
         // Register the backends using inventory.
         for kind in inventory::iter::<BackendKind> {
-            println!("{}", kind.name);
+            println!("{}", kind.name); // TODO: Use the log crate.
             this.backend_kinds
                 .insert(kind.name.to_string(), kind.clone());
         }
@@ -34,10 +35,10 @@ impl Workspace {
         options: BackendOptions,
     ) -> Result<()> {
         if self.backends.contains_key(&backend_name) {
-            bail!("Backend named {} already exists", backend_name);
+            bail!("Backend named '{}' already exists", backend_name);
         }
         let Some(backend_kind) = self.backend_kinds.get(&backend_name) else {
-            bail!("No backend named {}", backend_name);
+            bail!("No backend named '{}'", backend_name);
         };
         self.backends
             .insert(backend_name, (backend_kind.create)(options));
@@ -45,10 +46,42 @@ impl Workspace {
         Ok(())
     }
 
-    pub async fn get_backend(&self, backend_name: &str) -> Result<Arc<RwLock<dyn Backend>>> {
+    pub fn get_backend(&self, backend_name: &str) -> Result<Arc<RwLock<dyn Backend>>> {
         let Some(backend) = self.backends.get(backend_name).cloned() else {
-            bail!("No backend named {}", backend_name);
+            bail!("No backend named '{}'", backend_name);
         };
         Ok(backend)
+    }
+
+    pub async fn create_table(&mut self, backend_name: &str, table: Table) -> Result<()> {
+        let table_name = table.name().clone();
+        if let Some(name) = &table_name
+            && self.named_tables.contains_key(name)
+        {
+            bail!("Cannot create table with duplicate name: {:?}", name);
+        }
+        let id = table.id();
+        let backend = self.get_backend(backend_name)?;
+        let mut handle = backend.write().await;
+        handle.insert(id, table).await?;
+        self.table_to_backend.insert(id, backend_name.to_string());
+        if let Some(name) = table_name {
+            self.named_tables.insert(name, id);
+        }
+        Ok(())
+    }
+
+    pub fn get_backend_for_table_id(&self, id: &TableId) -> Result<Arc<RwLock<dyn Backend>>> {
+        let Some(backend_name) = self.table_to_backend.get(id).cloned() else {
+            bail!("No table with id: {:?}", id);
+        };
+        self.get_backend(&backend_name)
+    }
+
+    pub fn get_backend_for_table_name(&self, name: &TableName) -> Result<Arc<RwLock<dyn Backend>>> {
+        let Some(table_id) = self.named_tables.get(name).cloned() else {
+            bail!("No table named: {:?}", name);
+        };
+        self.get_backend_for_table_id(&table_id)
     }
 }

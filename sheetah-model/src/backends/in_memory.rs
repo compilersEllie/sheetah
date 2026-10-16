@@ -5,7 +5,8 @@ use anyhow::{Result, bail};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 #[derive(Debug)]
 pub struct InMemoryBackend {
