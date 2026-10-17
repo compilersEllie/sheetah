@@ -6,8 +6,8 @@ use std::collections::HashMap;
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct TableName {
-    name: Option<String>,
-    clash: u32,
+    pub name: Option<String>,
+    pub clash: u32,
 }
 
 impl_stable_hash!(TableName { name, clash });
@@ -22,10 +22,6 @@ impl_stable_hash!(TableId { id });
 impl TableId {
     pub fn new(id: u128) -> Self {
         Self { id }
-    }
-
-    pub fn id(&self) -> u128 {
-        self.id
     }
 }
 
@@ -48,12 +44,23 @@ impl_stable_hash!(Table {
 });
 
 impl Table {
+    pub fn unnamed() -> Table {
+        Table::default()
+    }
+
+    pub fn named(name: TableName) -> Table {
+        Table {
+            name: Some(name),
+            ..Table::default()
+        }
+    }
+
     pub fn id(&self) -> TableId {
         let mut hasher = CryptoStableHasher::new();
         self.stable_hash(stable_hash::FieldAddress::root(), &mut hasher);
         let hash = hasher.finish();
         let id = BigEndian::read_u128(&hash);
-        TableId { id }
+        TableId::new(id)
     }
 
     pub fn name(&self) -> &Option<TableName> {
