@@ -1,6 +1,7 @@
 use crate::backend::{Backend, BackendKind, BackendOptions};
 use crate::table::{Table, TableId, TableName};
 use anyhow::{Result, bail};
+use futures::future::join_all;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -43,6 +44,18 @@ impl Workspace {
             map.insert(k.to_string(), v.read().await.kind().to_string());
         }
         map
+    }
+
+    pub async fn flush(&mut self) -> Result<()> {
+        let flushes: Vec<_> = self
+            .backends
+            .values_mut()
+            .map(async |v| v.write().await.flush().await)
+            .collect();
+        for res in join_all(flushes).await {
+            res?;
+        }
+        Ok(())
     }
 
     pub async fn create_backend(
@@ -256,6 +269,7 @@ mod tests {
         let table = Table::named(name);
         assert!(workspace.create_table("test", table.clone()).await.is_ok());
         assert!(workspace.create_table("test", table).await.is_err());
+        assert!(workspace.flush().await.is_ok());
         Ok(())
     }
 }

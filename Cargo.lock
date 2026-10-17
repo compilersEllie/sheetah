@@ -5262,6 +5262,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "byteorder",
+ "futures",
  "inventory",
  "platform-dirs",
  "postcard",
