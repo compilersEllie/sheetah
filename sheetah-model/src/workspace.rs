@@ -128,4 +128,49 @@ mod tests {
         assert_eq!(workspace.list_backends().await.get("test"), Some(&"In Memory (volatile)".to_string()));
         Ok(())
     }
+
+    #[tokio::test]
+    async fn workspace_backend_kinds() -> Result<()> {
+        let workspace = Workspace::new();
+        assert_eq!(workspace.list_backend_kinds().await, vec![
+                "In Memory (volatile)".to_string(),
+        ]);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn workspace_create_backend_duplicate() -> Result<()> {
+        let mut workspace = Workspace::new();
+        assert!(workspace.create_backend(
+                "In Memory (volatile)".to_string(),
+                BackendOptions {
+                    name: "test".to_string(),
+                    version: "0.1.0".to_string(),
+                    relative_path: PathBuf::new().join(".test"),
+                },
+            ).await.is_ok());
+        assert!(workspace.create_backend(
+                "In Memory (volatile)".to_string(),
+                BackendOptions {
+                    name: "test".to_string(),
+                    version: "0.1.0".to_string(),
+                    relative_path: PathBuf::new().join(".test"),
+                },
+            ).await.is_err());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn workspace_create_backend_nonexistent() -> Result<()> {
+        let mut workspace = Workspace::new();
+        assert!(workspace.create_backend(
+                "Nonexistent".to_string(),
+                BackendOptions {
+                    name: "test".to_string(),
+                    version: "0.1.0".to_string(),
+                    relative_path: PathBuf::new().join(".test"),
+                },
+            ).await.is_err());
+        Ok(())
+    }
 }
