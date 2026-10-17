@@ -27,6 +27,7 @@ inventory::collect!(BackendKind);
 #[async_trait]
 pub trait Backend: Debug + Send + Sync {
     fn name(&self) -> &str;
+    fn kind(&self) -> &str;
 
     async fn get<'a>(&'a self, table_id: &TableId) -> Result<&'a Table>;
     async fn get_mut<'a>(&'a mut self, table_id: &TableId) -> Result<&'a mut Table>;
