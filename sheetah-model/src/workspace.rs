@@ -29,16 +29,33 @@ impl Workspace {
         this
     }
 
+    pub async fn list_backend_kinds(&self) -> Vec<String> {
+        let mut backends = Vec::new();
+        for k in self.backend_kinds.keys() {
+            backends.push(k.to_string());
+        }
+        backends
+    }
+
+    pub async fn list_backends(&self) -> HashMap<String, String> {
+        let mut map = HashMap::new();
+        for (k, v) in &self.backends {
+            map.insert(k.to_string(), v.read().await.kind().to_string());
+        }
+        map
+    }
+
     pub async fn create_backend(
         &mut self,
-        backend_name: String,
+        backend_kind_name: String,
         options: BackendOptions,
     ) -> Result<()> {
+        let backend_name = options.name.to_owned();
         if self.backends.contains_key(&backend_name) {
             bail!("Backend named '{}' already exists", backend_name);
         }
-        let Some(backend_kind) = self.backend_kinds.get(&backend_name) else {
-            bail!("No backend named '{}'", backend_name);
+        let Some(backend_kind) = self.backend_kinds.get(&backend_kind_name) else {
+            bail!("No backend named '{}'", backend_kind_name);
         };
         self.backends
             .insert(backend_name, (backend_kind.create)(options));
@@ -83,5 +100,32 @@ impl Workspace {
             bail!("No table named: {:?}", name);
         };
         self.get_backend_for_table_id(&table_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn workspace_management() -> Result<()> {
+        let mut workspace = Workspace::new();
+        assert_eq!(workspace.list_backends().await, HashMap::new());
+
+        workspace
+            .create_backend(
+                "In Memory (volatile)".to_string(),
+                BackendOptions {
+                    name: "test".to_string(),
+                    version: "0.1.0".to_string(),
+                    relative_path: PathBuf::new().join(".test"),
+                },
+            )
+            .await?;
+
+        assert_eq!(workspace.list_backends().await.get("test"), Some(&"In Memory (volatile)".to_string()));
+        Ok(())
     }
 }

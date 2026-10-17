@@ -136,7 +136,7 @@ impl Value for Option<Box<dyn Value>> {
 }
 
 // TODO: Add a geneic "number" / bignumber
-// TODO: Add big text
+// TODO: Add big text using ropey
 // TODO: Add short string optimisation
 // TODO: Add images
 // TODO: Add polynomials

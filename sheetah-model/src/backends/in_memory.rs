@@ -31,6 +31,10 @@ impl Backend for InMemoryBackend {
         &self.options.name
     }
 
+    fn kind(&self) -> &str {
+        "In Memory (volatile)"
+    }
+
     async fn get<'a>(&'a self, table_id: &TableId) -> Result<&'a Table> {
         let Some(table_info) = self.tables.get(table_id) else {
             bail!("No table {:?} found in {}", table_id, self.options.name);
