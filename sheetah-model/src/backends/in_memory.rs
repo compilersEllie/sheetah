@@ -65,4 +65,7 @@ impl Backend for InMemoryBackend {
     async fn flush(&mut self) -> Result<()> {
         Ok(())
     }
+    async fn destroy(&mut self) -> Result<()> {
+        Ok(())
+    }
 }

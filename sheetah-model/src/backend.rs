@@ -35,4 +35,7 @@ pub trait Backend: Debug + Send + Sync {
 
     /// Ensure all data is stored to  the backend.
     async fn flush(&mut self) -> Result<()>;
+
+    /// Destroy the backend, removing data from disk
+    async fn destroy(&mut self) -> Result<()>;
 }
