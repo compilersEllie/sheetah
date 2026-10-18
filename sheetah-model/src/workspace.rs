@@ -62,6 +62,18 @@ impl Workspace {
         Ok(())
     }
 
+    pub async fn destroy(&mut self) -> Result<()> {
+        let destroys: Vec<_> = self
+            .backends
+            .values_mut()
+            .map(async |v| v.write().await.destroy().await)
+            .collect();
+        for res in join_all(destroys).await {
+            res?;
+        }
+        Ok(())
+    }
+
     pub async fn create_backend(
         &mut self,
         backend_kind_name: String,
@@ -72,11 +84,20 @@ impl Workspace {
             bail!("Backend named '{}' already exists", backend_name);
         }
         let Some(backend_kind) = self.backend_kinds.get(&backend_kind_name) else {
-            bail!("No backend named '{}'", backend_kind_name);
+            bail!("No backend kind named '{}'", backend_kind_name);
         };
         self.backends
             .insert(backend_name, (backend_kind.create)(options));
         // TODO: Run the setup process?
+        Ok(())
+    }
+
+    pub async fn remove_backend(&mut self, backend_name: String, destroy: bool) -> Result<()> {
+        let backend = self.backends.remove(&backend_name);
+        if destroy && let Some(backend) = backend {
+            let mut handle = backend.write().await;
+            handle.destroy().await?;
+        }
         Ok(())
     }
 
@@ -274,6 +295,7 @@ mod tests {
         assert!(workspace.create_table("test", table.clone()).await.is_ok());
         assert!(workspace.create_table("test", table).await.is_err());
         assert!(workspace.flush().await.is_ok());
+        assert!(workspace.destroy().await.is_ok());
         Ok(())
     }
 }
