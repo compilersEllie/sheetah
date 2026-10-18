@@ -23,7 +23,6 @@ impl Workspace {
         let mut this = Self::default();
         // Register the backends using inventory.
         for kind in inventory::iter::<BackendKind> {
-            println!("{}", kind.name); // TODO: Use the log crate.
             this.backend_kinds
                 .insert(kind.name.to_string(), kind.clone());
         }
@@ -39,9 +38,14 @@ impl Workspace {
     }
 
     pub async fn list_backends(&self) -> HashMap<String, String> {
+        let backends: Vec<_> = self
+            .backends
+            .iter()
+            .map(async |(k, v)| (k.to_string(), v.read().await.kind().to_string()))
+            .collect();
         let mut map = HashMap::new();
-        for (k, v) in &self.backends {
-            map.insert(k.to_string(), v.read().await.kind().to_string());
+        for (k, v) in join_all(backends).await {
+            map.insert(k, v);
         }
         map
     }
