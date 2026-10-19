@@ -9,7 +9,7 @@ pub struct OpticId {
 
 impl_stable_hash!(OpticId { id });
 
-// TODO(perf): Look into type safe type level patterns with PolyMap
+// TODO(perf): Look into type safe type level patterns with PolyMap #2
 pub trait Optic {
     type In: Value;
     type Out: Value;
@@ -21,7 +21,7 @@ pub type Functor<S, A> = Arc<Box<dyn Fn(S) -> A>>;
 pub type BiFunctor<S, T, A> = Arc<Box<dyn Fn(S, T) -> A>>;
 
 pub struct Iso<S: Value + 'static, A: Value + 'static> {
-    // TODO(mem): Use short string optimisation/interning.
+    // TODO(mem): Use short string optimisation/interning. #3
     name: String,
     view_impl: Functor<S, A>,
     review_impl: Functor<A, S>,
@@ -91,7 +91,7 @@ impl<S: Value + 'static, A: Value + 'static> From<Iso<S, A>> for Prism<S, A> {
 }
 
 pub struct Lens<S: Value + 'static, A: Value + 'static> {
-    // TODO(mem): Use short string optimisation/interning.
+    // TODO(mem): Use short string optimisation/interning. #3
     name: String,
     view_impl: Functor<S, A>,
     set_impl: BiFunctor<S, A, S>,
@@ -150,7 +150,7 @@ impl<S: Value + Clone + 'static, A: Value + 'static> From<Lens<S, A>> for Traver
 }
 
 pub struct Prism<S: Value + 'static, A: Value + 'static> {
-    // TODO(mem): Use short string optimisation/interning.
+    // TODO(mem): Use short string optimisation/interning. #3
     name: String,
     preview_impl: Functor<S, Option<A>>,
     review_impl: Functor<A, S>,
@@ -207,7 +207,7 @@ impl<S: Value + 'static, A: Value + 'static> From<Prism<S, A>> for Traversal<S, 
 }
 
 pub struct Traversal<S: Value + 'static, A: Value + 'static> {
-    // TODO(mem): Use short string optimisation/interning.
+    // TODO(mem): Use short string optimisation/interning. #3
     name: String,
     to_list_impl: Functor<Option<S>, Vec<A>>,
     over_impl: BiFunctor<Functor<A, A>, Option<S>, Option<S>>,
@@ -243,7 +243,7 @@ impl<S: Value + 'static, A: Value + 'static> Optic for Traversal<S, A> {
 }
 
 pub struct Affine<S: Value + 'static, A: Value + 'static> {
-    // TODO(mem): Use short string optimisation/interning.
+    // TODO(mem): Use short string optimisation/interning. #3
     name: String,
     to_list_impl: Functor<Option<S>, Option<A>>,
     over_impl: BiFunctor<Functor<A, A>, Option<S>, Option<S>>,
@@ -337,7 +337,7 @@ impl<A: Value + Clone + 'static, B: Value + Clone, C: Value> Compose<Lens<B, C>>
             view_impl: Arc::new(Box::new(move |source| (other_view1)((self_view1)(source)))),
             set_impl: Arc::new(Box::new(move |source, new_subfield| {
                 let field: B = (self_view2)(source.clone());
-                // TODO: Avoid the clone here with a "take" method or Arc.
+                // TODO(mem): Avoid the clone here with a "take" method or Arc. #3
                 let new_field = (other_set)(field, new_subfield);
                 self_set(source, new_field)
             })),

@@ -5,7 +5,7 @@ use std::fmt::Debug;
 
 #[typetag::serde(tag = "type")]
 pub trait Value: Debug + 'static {
-    // TODO: Add localisation support
+    // TODO: Add localisation support #4
     fn name(&self) -> String;
 
     fn cloned(&self) -> Box<dyn Value>;
@@ -135,13 +135,13 @@ impl Value for Option<Box<dyn Value>> {
     }
 }
 
-// TODO: Add a geneic "number" / bignumber
-// TODO: Add big text using ropey
-// TODO: Add short string optimisation
-// TODO: Add images
-// TODO: Add polynomials
-// TODO: Add url?
-// TODO: Add matricies
+// TODO: Add a geneic "number" / bignumber #2
+// TODO: Add big text using ropey #2
+// TODO: Add short string optimisation #3
+// TODO: Add images #3
+// TODO: Add polynomials #3
+// TODO: Add url? or parse #3
+// TODO: Add matricies #3
 
 #[derive(Clone, Debug)]
 pub struct ValueInfo {

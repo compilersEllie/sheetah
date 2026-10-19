@@ -88,7 +88,7 @@ impl Workspace {
         };
         self.backends
             .insert(backend_name, (backend_kind.create)(options));
-        // TODO: Run the setup process?
+        // TODO: Run the setup process? #1
         Ok(())
     }
 
