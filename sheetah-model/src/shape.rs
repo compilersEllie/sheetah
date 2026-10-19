@@ -127,7 +127,7 @@ impl FieldInfo {
         Self { id, name, kind }
     }
 
-    pub fn id(&mut self) -> &FieldId {
+    pub fn id(&self) -> &FieldId {
         &self.id
     }
 
@@ -142,7 +142,7 @@ impl FieldInfo {
         Ok(())
     }
 
-    pub fn name(&mut self) -> &str {
+    pub fn name(&self) -> &str {
         self.name.as_deref().unwrap_or("unnamed")
     }
 
