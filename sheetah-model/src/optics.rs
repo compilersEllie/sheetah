@@ -25,8 +25,6 @@ pub struct Iso<S: Value + 'static, A: Value + 'static> {
     name: String,
     view_impl: Functor<S, A>,
     review_impl: Functor<A, S>,
-    // TODO(perf): Store all Arc data in a single value to reduce reference
-    // counting overhead.
 }
 
 impl<S: Value + 'static, A: Value + 'static> Iso<S, A> {
@@ -97,8 +95,6 @@ pub struct Lens<S: Value + 'static, A: Value + 'static> {
     name: String,
     view_impl: Functor<S, A>,
     set_impl: BiFunctor<S, A, S>,
-    // TODO(perf): Store all Arc data in a single value to reduce reference
-    // counting overhead.
 }
 
 impl<S: Value + 'static, A: Value + 'static> Lens<S, A> {
@@ -158,8 +154,6 @@ pub struct Prism<S: Value + 'static, A: Value + 'static> {
     name: String,
     preview_impl: Functor<S, Option<A>>,
     review_impl: Functor<A, S>,
-    // TODO(perf): Store all Arc data in a single value to reduce reference
-    // counting overhead.
 }
 
 impl<S: Value + 'static, A: Value + 'static> Prism<S, A> {
@@ -217,8 +211,6 @@ pub struct Traversal<S: Value + 'static, A: Value + 'static> {
     name: String,
     to_list_impl: Functor<Option<S>, Vec<A>>,
     over_impl: BiFunctor<Functor<A, A>, Option<S>, Option<S>>,
-    // TODO(perf): Store all Arc data in a single value to reduce reference
-    // counting overhead.
 }
 
 impl<S: Value + 'static, A: Value + 'static> Traversal<S, A> {
@@ -255,8 +247,6 @@ pub struct Affine<S: Value + 'static, A: Value + 'static> {
     name: String,
     to_list_impl: Functor<Option<S>, Option<A>>,
     over_impl: BiFunctor<Functor<A, A>, Option<S>, Option<S>>,
-    // TODO(perf): Store all Arc data in a single value to reduce reference
-    // counting overhead.
 }
 
 impl<S: Value + 'static, A: Value + 'static> Affine<S, A> {
