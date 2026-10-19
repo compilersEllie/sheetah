@@ -33,9 +33,11 @@ pub trait Backend: Debug + Send + Sync {
     async fn get_mut<'a>(&'a mut self, table_id: &TableId) -> Result<&'a mut Table>;
     async fn insert(&mut self, table_id: TableId, table: Table) -> Result<()>;
 
+    /// Setup files for thee backend.
+    async fn setup(&mut self) -> Result<()>;
     /// Ensure all data is stored to  the backend.
     async fn flush(&mut self) -> Result<()>;
 
-    /// Destroy the backend, removing data from disk
+    /// Destroy the backend, removing data from disk.
     async fn destroy(&mut self) -> Result<()>;
 }
