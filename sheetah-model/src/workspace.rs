@@ -86,9 +86,15 @@ impl Workspace {
         let Some(backend_kind) = self.backend_kinds.get(&backend_kind_name) else {
             bail!("No backend kind named '{}'", backend_kind_name);
         };
-        self.backends
-            .insert(backend_name, (backend_kind.create)(options));
-        // TODO: Run the setup process? #1
+
+        // Create the backend data.
+        let backend = self
+            .backends
+            .entry(backend_name)
+            .or_insert((backend_kind.create)(options));
+
+        // Setup the backend  on disk/remote.
+        backend.write().await.setup().await?;
         Ok(())
     }
 

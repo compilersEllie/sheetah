@@ -61,10 +61,16 @@ impl Backend for InMemoryBackend {
         Ok(())
     }
 
+    /// Setup files for thee backend.
+    async fn setup(&mut self) -> Result<()> {
+        Ok(())
+    }
+
     /// Ensure all data is stored to the backend.
     async fn flush(&mut self) -> Result<()> {
         Ok(())
     }
+
     async fn destroy(&mut self) -> Result<()> {
         Ok(())
     }
