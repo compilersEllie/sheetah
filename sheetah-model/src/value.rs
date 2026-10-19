@@ -1,4 +1,4 @@
-use crate::optics::OpticId;
+use crate::optic::OpticId;
 use stable_hash::impl_stable_hash;
 use std::any::{Any, TypeId};
 use std::fmt::Debug;
@@ -6,6 +6,8 @@ use std::fmt::Debug;
 #[typetag::serde(tag = "type")]
 pub trait Value: Debug + 'static {
     // TODO: Add localisation support #4
+    // TODO(feat): Use garde for validstion #3
+    // https://docs.rs/garde/latest/garde/#basic-usage-example
     fn name(&self) -> String;
 
     fn cloned(&self) -> Box<dyn Value>;

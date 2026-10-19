@@ -1,8 +1,10 @@
 use crate::backend::{Backend, BackendKind, BackendOptions};
+use crate::edit::Edit;
 use crate::table::{Table, TableId, TableName};
 use anyhow::{Result, bail};
 use futures::future::join_all;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -16,6 +18,8 @@ pub struct Workspace {
     backends: HashMap<String, Arc<RwLock<dyn Backend>>>,
     /// A map of store types the workspace can create and use.
     backend_kinds: HashMap<String, BackendKind>,
+    /// Log of edits made to create this workspaxce.
+    logs: Vec<Edit>, // TODO(perf): Consider using a summ tree here. #4
 }
 
 impl Workspace {
@@ -144,6 +148,27 @@ impl Workspace {
             bail!("No table named: {:?}", name);
         };
         self.get_backend_for_table_id(&table_id)
+    }
+
+    pub async fn read(_workspace_dir: &Path) -> Result<Self> {
+        let this = Self::default();
+        // TODO(feat): Read tworkspace data #1
+        Ok(this)
+    }
+
+    pub async fn merge(&mut self, _other: &Self) -> Result<()> {
+        // TODO(feat): Merge two tworkspaces #2
+        Ok(())
+    }
+
+    pub async fn load(&mut self, workspace_dir: &Path) -> Result<()> {
+        let other = Self::read(workspace_dir).await?;
+        self.merge(&other).await
+    }
+
+    pub fn apply_edit(&mut self, _edit: Edit) -> Result<()> {
+        // TODO(feat) Actually run the edits and report success or errors. #1
+        Ok(())
     }
 }
 

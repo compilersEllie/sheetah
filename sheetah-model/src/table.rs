@@ -1,4 +1,4 @@
-use crate::optics::OpticId;
+use crate::optic::OpticId;
 use crate::shape::Shape;
 use byteorder::{BigEndian, ByteOrder};
 use stable_hash::{StableHash, StableHasher, crypto::CryptoStableHasher, impl_stable_hash};
