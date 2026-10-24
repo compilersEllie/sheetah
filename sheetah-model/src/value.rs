@@ -1,5 +1,5 @@
 use crate::optic::OpticId;
-use stable_hash::impl_stable_hash;
+use stable_hash::{StableHash, StableHasher, impl_stable_hash};
 use std::any::{Any, TypeId};
 use std::fmt::Debug;
 
@@ -11,6 +11,8 @@ pub trait Value: Debug + 'static {
     fn name(&self) -> String;
 
     fn cloned(&self) -> Box<dyn Value>;
+
+    fn bytes(&self) -> Vec<u8>;
 
     fn type_id(&self) -> TypeId {
         Any::type_id(self)
@@ -24,6 +26,13 @@ pub trait Value: Debug + 'static {
     }
 }
 
+impl StableHash for &dyn Value {
+    fn stable_hash<H: StableHasher>(&self, field_address: H::Addr, state: &mut H) {
+        let bytes = self.bytes();
+        state.write(field_address, &bytes);
+    }
+}
+
 #[typetag::serde]
 impl Value for i8 {
     fn name(&self) -> String {
@@ -32,6 +41,10 @@ impl Value for i8 {
 
     fn cloned(&self) -> Box<dyn Value> {
         Box::new(*self)
+    }
+
+    fn bytes(&self) -> Vec<u8> {
+        [b'i', 8].into_iter().chain(self.to_be_bytes()).collect()
     }
 }
 
@@ -44,6 +57,10 @@ impl Value for i16 {
     fn cloned(&self) -> Box<dyn Value> {
         Box::new(*self)
     }
+
+    fn bytes(&self) -> Vec<u8> {
+        [b'i', 16].into_iter().chain(self.to_be_bytes()).collect()
+    }
 }
 
 #[typetag::serde]
@@ -54,6 +71,10 @@ impl Value for i32 {
 
     fn cloned(&self) -> Box<dyn Value> {
         Box::new(*self)
+    }
+
+    fn bytes(&self) -> Vec<u8> {
+        [b'i', 32].into_iter().chain(self.to_be_bytes()).collect()
     }
 }
 
@@ -66,6 +87,10 @@ impl Value for i64 {
     fn cloned(&self) -> Box<dyn Value> {
         Box::new(*self)
     }
+
+    fn bytes(&self) -> Vec<u8> {
+        [b'i', 64].into_iter().chain(self.to_be_bytes()).collect()
+    }
 }
 
 #[typetag::serde]
@@ -76,6 +101,10 @@ impl Value for i128 {
 
     fn cloned(&self) -> Box<dyn Value> {
         Box::new(*self)
+    }
+
+    fn bytes(&self) -> Vec<u8> {
+        [b'i', 128].into_iter().chain(self.to_be_bytes()).collect()
     }
 }
 
@@ -88,6 +117,10 @@ impl Value for f32 {
     fn cloned(&self) -> Box<dyn Value> {
         Box::new(*self)
     }
+
+    fn bytes(&self) -> Vec<u8> {
+        [b'f', 32].into_iter().chain(self.to_be_bytes()).collect()
+    }
 }
 
 #[typetag::serde]
@@ -98,6 +131,10 @@ impl Value for f64 {
 
     fn cloned(&self) -> Box<dyn Value> {
         Box::new(*self)
+    }
+
+    fn bytes(&self) -> Vec<u8> {
+        [b'f', 64].into_iter().chain(self.to_be_bytes()).collect()
     }
 }
 
@@ -110,6 +147,14 @@ impl Value for String {
     fn cloned(&self) -> Box<dyn Value> {
         Box::new(self.clone())
     }
+
+    fn bytes(&self) -> Vec<u8> {
+        b"s".iter()
+            .chain(&self.len().to_be_bytes())
+            .chain(self.as_bytes())
+            .cloned()
+            .collect()
+    }
 }
 
 #[typetag::serde]
@@ -120,6 +165,10 @@ impl Value for Box<dyn Value> {
 
     fn cloned(&self) -> Box<dyn Value> {
         Box::new((self as &dyn Value).cloned())
+    }
+
+    fn bytes(&self) -> Vec<u8> {
+        (self.as_ref()).bytes()
     }
 }
 
@@ -135,6 +184,13 @@ impl Value for Option<Box<dyn Value>> {
     fn cloned(&self) -> Box<dyn Value> {
         Box::new((self as &dyn Value).cloned())
     }
+
+    fn bytes(&self) -> Vec<u8> {
+        match self {
+            Some(v) => b"a".iter().chain(&v.bytes()).cloned().collect(),
+            None => b"n".to_vec(),
+        }
+    }
 }
 
 // TODO: Add a generic "number" / bignumber #2
@@ -145,7 +201,7 @@ impl Value for Option<Box<dyn Value>> {
 // TODO: Add url? or parse #3
 // TODO: Add matricies #3
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 pub struct ValueInfo {
     name: String,
     chosen_format: Option<OpticId>,
