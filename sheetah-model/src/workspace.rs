@@ -3,6 +3,7 @@ use crate::table::{Table, TableId, TableName};
 use anyhow::{Result, bail};
 use futures::future::join_all;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -144,6 +145,22 @@ impl Workspace {
             bail!("No table named: {:?}", name);
         };
         self.get_backend_for_table_id(&table_id)
+    }
+
+    pub async fn read(_workspace_dir: &Path) -> Result<Self> {
+        let this = Self::default();
+        // TODO(feat): Read workspace data #1
+        Ok(this)
+    }
+
+    pub async fn merge(&mut self, _other: &Self) -> Result<()> {
+        // TODO(feat): Merge two workspaces #2
+        Ok(())
+    }
+
+    pub async fn load(&mut self, workspace_dir: &Path) -> Result<()> {
+        let other = Self::read(workspace_dir).await?;
+        self.merge(&other).await
     }
 }
 
