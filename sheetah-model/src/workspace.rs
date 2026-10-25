@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use crate::optic_store::OpticStore;
 
 #[derive(Default)]
 pub struct Workspace {
@@ -20,6 +21,9 @@ pub struct Workspace {
     backend_kinds: HashMap<String, BackendKind>,
     /// The next available field ID to be used.
     next_field_id: FieldId,
+
+    /// A map of store types the workspace can create and use.
+    optics: OpticStore, // TODO(bug): Do not serialise, make static S.
 }
 
 impl Workspace {
