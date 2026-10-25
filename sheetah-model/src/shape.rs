@@ -93,6 +93,10 @@ impl Dimension {
         } else {
             self.order.push(id);
         }
+    }
+
+    pub fn add_field(&mut self, info: FieldInfo) -> Result<()> {
+        self.fields.push(info);
         Ok(())
     }
 
@@ -105,6 +109,8 @@ impl Dimension {
     pub fn reset_sort(&mut self) {
         self.sort.clear();
     }
+
+    // TODO(feat): Calculate the remainder (fields and types) for each cell.
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, serde::Serialize, serde::Deserialize)]

@@ -1,4 +1,6 @@
 use crate::error::Result;
+use crate::workspace::Workspace;
+use crate::{table::TableId, workspace::Workspace};
 use crate::{shape::Shape, table::TableId, workspace::Workspace};
 use stable_hash::impl_stable_hash;
 use std::{
@@ -70,7 +72,6 @@ impl Display for Index {
         write!(f, "{}", self.raw())
     }
 }
-
 // TODO(feat): An editor module with loro documents and hash trees etc. #1
 
 #[derive(Default)]
@@ -110,6 +111,12 @@ pub struct Pos {
 impl Display for Pos {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "({}, {})", self.row, self.column)
+    }
+
+    pub async fn view(&self) -> Result<View> {
+        // TODO(feat): Views should contain tables, cursor locations, unwritten state etc.
+        let mut view = View::default();
+        Ok(view)
     }
 }
 

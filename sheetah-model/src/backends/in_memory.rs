@@ -1,5 +1,5 @@
 use crate::backend::{Backend, BackendKind, BackendOptions};
-use crate::editor::{Index, Pos, View};
+use crate::editor::{Index, Pos, View, Rect};
 use crate::error::{Result, SheetahError};
 use crate::shape::FieldId;
 use crate::table::{Table, TableId};
