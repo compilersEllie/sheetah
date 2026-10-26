@@ -28,12 +28,12 @@ impl TableId {
 #[derive(Default, Clone, Debug)]
 pub struct Table {
     /// The table may have a user facing namee or may be anonyymous.
-    name: Option<TableName>,
+    pub name: Option<TableName>,
     /// For tracking dependencies and propagating updates.
-    dependencies: HashMap<TableName, TableId>,
+    pub dependencies: HashMap<TableName, TableId>,
     // Should be per column.
-    derivation: Vec<OpticId>,
-    shape: Shape,
+    pub derivation: Vec<OpticId>,
+    pub shape: Shape,
 }
 
 impl_stable_hash!(Table {
