@@ -2,6 +2,8 @@ use crate::{table::TableId, workspace::Workspace};
 use anyhow::Result;
 use std::path::PathBuf;
 
+pub type Index = u32; // Small index type for realworld use.
+
 // TODO(feat): An editor module with loro documents and hash trees etc. #1
 
 #[derive(Default)]
@@ -10,7 +12,7 @@ pub struct Editor {
     /// Directory where the workspace is stored.
     pub workspace_dir: Option<PathBuf>,
 
-    pub active_tab: u32,
+    pub active_tab: Index,
     pub tabs: Vec<Tab>,
 }
 
@@ -27,22 +29,22 @@ impl Editor {
 
 #[derive(Clone, Debug, Default)]
 pub struct Tab {
-    pub active_pane: u32,
+    pub active_pane: Index,
     pub panes: Vec<View>,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct Pos {
     // TODO(mem): Check the num size is large enough and as small as possible.
-    pub column: u32,
-    pub row: u32,
+    pub column: Index,
+    pub row: Index,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct Rect {
     pub start: Pos,
-    pub columns: u32,
-    pub rows: u32,
+    pub columns: Index,
+    pub rows: Index,
 }
 
 #[derive(Clone, Debug)]

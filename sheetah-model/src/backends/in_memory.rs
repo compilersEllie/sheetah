@@ -1,8 +1,8 @@
 use crate::backend::BackendOptions;
 use crate::backend::{Backend, BackendKind};
-use crate::editor::{Rect, View};
+use crate::editor::{Index, Rect, View};
 use crate::table::{Table, TableId};
-use crate::value::Value;
+use crate::value::{Value, Values};
 use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -12,7 +12,7 @@ use tokio::sync::RwLock;
 
 #[derive(Debug, Clone)]
 pub struct InMemoryRow {
-    columns: Vec<Arc<dyn Value>>,
+    columns: Values,
 }
 #[derive(Debug, Clone)]
 pub struct InMemoryTable {
@@ -82,6 +82,14 @@ impl Backend for InMemoryBackend {
         Ok(subtable)
     }
     async fn set_data<'a>(&'a self, _window: &Rect, _data: Vec<Vec<Arc<dyn Value>>>) -> Result<()> {
+        todo!()
+    }
+
+    async fn add_data_row<'a>(&'a self, _row_index: Index, _row: Values) -> Result<()> {
+        todo!()
+    }
+
+    async fn add_data_column<'a>(&'a self, _column_index: Index, _column_transposed: Values) -> Result<()> {
         todo!()
     }
 

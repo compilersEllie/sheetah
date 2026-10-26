@@ -1,6 +1,6 @@
-use crate::editor::{Rect, View};
+use crate::editor::{Index, Rect, View};
 use crate::table::{Table, TableId};
-use crate::value::Value;
+use crate::value::{Value, Values};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
@@ -38,6 +38,9 @@ pub trait Backend: Debug + Send + Sync {
     async fn get_data<'a>(&'a self, view: &View) -> Result<Vec<Vec<&'a Arc<dyn Value>>>>;
 
     async fn set_data<'a>(&'a self, window: &Rect, data: Vec<Vec<Arc<dyn Value>>>) -> Result<()>;
+
+    async fn add_data_row<'a>(&'a self, row_index: Index, row: Values) -> Result<()>;
+    async fn add_data_column<'a>(&'a self, column_index: Index, column_transposed: Values) -> Result<()>;
 
     /// Setup files for thee backend.
     async fn setup(&mut self) -> Result<()>;
