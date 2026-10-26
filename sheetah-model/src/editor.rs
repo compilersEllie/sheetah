@@ -35,7 +35,7 @@ pub struct Tab {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Pos {
-    // TODO(mem): Check the num size is large enough and as small as possible.
+    // TODO(mem): Check the num size is large enough and as small as possible. #4
     pub column: Index,
     pub row: Index,
 }
@@ -67,5 +67,5 @@ pub struct View {
     pub text_length: usize,
 
     // For bulk operations.
-    pub selected: Vec<Rect>, // TODO(perf): Smallvec
+    pub selected: Vec<Rect>, // TODO(perf): Smallvec #2
 }
