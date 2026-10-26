@@ -120,12 +120,21 @@ impl Backend for InMemoryBackend {
 
         for index in 0..(data.len() as u32) {
             let cursor = data.pos(index)?;
-            table_data.set(pos.column + cursor.column, pos.row + cursor.row, data.get(cursor.column, cursor.row)?.cloned())?;
+            table_data.set(
+                pos.column + cursor.column,
+                pos.row + cursor.row,
+                data.get(cursor.column, cursor.row)?.cloned(),
+            )?;
         }
         Ok(())
     }
 
-    async fn add_row<'a>(&'a mut self, table: TableId, row_index: Index, row: Values) -> Result<()> {
+    async fn add_row<'a>(
+        &'a mut self,
+        table: TableId,
+        row_index: Index,
+        row: Values,
+    ) -> Result<()> {
         let table_data = self
             .table_data
             .get_mut(&table)

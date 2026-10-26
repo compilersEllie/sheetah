@@ -1,4 +1,7 @@
-use crate::{editor::{Index, Pos}, value::ValueInfo};
+use crate::{
+    editor::{Index, Pos},
+    value::ValueInfo,
+};
 use anyhow::{Result, bail};
 use stable_hash::{FieldAddress, StableHash, StableHasher, impl_stable_hash};
 
@@ -36,7 +39,6 @@ impl_stable_hash!(Shape {
 });
 
 impl Shape {
-
     #[inline]
     pub fn dims(&self) -> Pos {
         Pos {
@@ -61,7 +63,6 @@ pub struct Dimension {
 impl_stable_hash!(Dimension { order, sort });
 
 impl Dimension {
-
     #[inline]
     pub fn len(&self) -> Index {
         self.order.len() as Index

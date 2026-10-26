@@ -274,9 +274,9 @@ impl Values2D {
     }
 
     pub async fn add_row(&mut self, row_index: Index, mut values: Values) -> Result<()> {
-        let new_size = ((self.rows()+1)*self.columns()) as usize;
+        let new_size = ((self.rows() + 1) * self.columns()) as usize;
         let mut new_data = Vec::with_capacity(new_size);
-        for row in 0..(self.rows()+1) {
+        for row in 0..(self.rows() + 1) {
             for _column in 0..(self.columns()) {
                 if row == row_index {
                     new_data.push(values.pop().unwrap());
@@ -290,10 +290,10 @@ impl Values2D {
     }
 
     pub async fn add_column(&mut self, column_index: Index, mut values: Values) -> Result<()> {
-        let new_size = (self.rows()*(self.columns()+1)) as usize;
+        let new_size = (self.rows() * (self.columns() + 1)) as usize;
         let mut new_data = Vec::with_capacity(new_size);
         for _row in 0..self.rows() {
-            for column in 0..(self.columns()+1) {
+            for column in 0..(self.columns() + 1) {
                 if column == column_index {
                     new_data.push(values.pop().unwrap());
                 } else {
