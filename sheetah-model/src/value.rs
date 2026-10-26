@@ -4,7 +4,7 @@ use std::any::{Any, TypeId};
 use std::fmt::Debug;
 
 #[typetag::serde(tag = "type")]
-pub trait Value: Debug + 'static {
+pub trait Value: Debug + Sync + Send + 'static {
     // TODO: Add localisation support #4
     // TODO(feat): Use garde for validstion #3
     // https://docs.rs/garde/latest/garde/#basic-usage-example
@@ -21,6 +21,7 @@ pub trait Value: Debug + 'static {
     fn make_info(&self) -> ValueInfo {
         ValueInfo {
             name: self.name(),
+            type_id_hash: unsafe { std::mem::transmute::<std::any::TypeId, u128>(self.type_id()) },
             chosen_format: None,
         }
     }
@@ -204,17 +205,23 @@ impl Value for Option<Box<dyn Value>> {
 #[derive(Clone, Debug, Hash)]
 pub struct ValueInfo {
     name: String,
+    type_id_hash: u128, // TypeId (but can be stablehashed etc.)
     chosen_format: Option<OpticId>,
 }
 
 impl_stable_hash!(ValueInfo {
     name,
+    type_id_hash,
     chosen_format
 });
 
 impl ValueInfo {
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn type_id(&self) -> TypeId {
+        unsafe { std::mem::transmute(self.type_id_hash) }
     }
 
     pub fn format(&self) -> &Option<OpticId> {

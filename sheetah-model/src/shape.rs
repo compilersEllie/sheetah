@@ -1,7 +1,8 @@
 use crate::value::ValueInfo;
+use anyhow::{Result, bail};
 use stable_hash::{FieldAddress, StableHash, StableHasher, impl_stable_hash};
 
-pub type ColumnIndex = u32;
+pub type FieldId = u32;
 
 #[derive(Clone, Debug)]
 pub enum SortOrder {
@@ -23,50 +24,83 @@ impl StableHash for SortOrder {
 
 #[derive(Default, Clone, Debug)]
 pub struct Shape {
-    columns: Vec<ColumnInfo>,
-    sort_order: Vec<(ColumnIndex, SortOrder)>,
+    fields: Vec<FieldInfo>,
+    pub columns: Dimension,
+    pub rows: Dimension,
 }
 
 impl_stable_hash!(Shape {
+    fields,
     columns,
-    sort_order
+    rows
 });
 
 impl Shape {
-    pub fn add_column(&mut self, index: ColumnIndex, col: ColumnInfo) {
-        self.columns.insert(index as usize, col);
+    pub fn add_field(&mut self, info: FieldInfo) -> Result<()> {
+        self.fields.push(info);
+        Ok(())
+    }
+    // TODO(feat): Calculate the remainder (fields and types) for each cell.
+}
+
+#[derive(Default, Clone, Debug)]
+pub struct Dimension {
+    order: Vec<FieldId>,
+    sort: Vec<(FieldId, SortOrder)>,
+}
+
+impl_stable_hash!(Dimension { order, sort });
+
+impl Dimension {
+    pub fn add(&mut self, index: Option<usize>, id: FieldId) -> Result<()> {
+        if let Some(index) = index {
+            self.order.insert(index, id);
+        } else {
+            self.order.push(id);
+        }
+        Ok(())
     }
 
-    pub fn push_column(&mut self, col: ColumnInfo) {
-        self.columns.push(col);
-    }
-
-    pub fn add_sort_order(&mut self, col: ColumnIndex, order: SortOrder) {
+    pub fn add_sort(&mut self, id: FieldId, order: SortOrder) {
         // Avoid duplicates.
-        self.sort_order.retain(|(o_col, _o_order)| *o_col != col);
-        self.sort_order.push((col, order));
+        self.sort.retain(|(o_id, _o_order)| *o_id != id);
+        self.sort.push((id, order));
     }
 
-    pub fn reset_sort_order(&mut self) {
-        self.sort_order.clear();
+    pub fn reset_sort(&mut self) {
+        self.sort.clear();
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct ColumnInfo {
+#[derive(Clone, Debug, Hash)]
+pub struct FieldInfo {
+    id: FieldId, // Unique ID per table.
     name: Option<String>,
-    kind: ValueInfo,
+    kind: ValueInfo, // Including type and format.
 }
 
-impl_stable_hash!(ColumnInfo { name, kind });
+impl_stable_hash!(FieldInfo { id, name, kind });
 
-impl ColumnInfo {
+impl FieldInfo {
+    pub fn id(&mut self) -> &FieldId {
+        &self.id
+    }
+
+    pub fn set_id(&mut self, id: FieldId) -> Result<()> {
+        if self.id != 0 {
+            bail!("Field already has id {}", self.id);
+        }
+        self.id = id;
+        Ok(())
+    }
+
     pub fn name(&mut self) -> &str {
         self.name.as_deref().unwrap_or("unnamed")
     }
 
-    pub fn set_name(&mut self, name: String) {
+    pub fn set_name(&mut self, name: String) -> Result<()> {
         self.name = Some(name);
+        Ok(())
     }
 
     pub fn kind(&self) -> &ValueInfo {
