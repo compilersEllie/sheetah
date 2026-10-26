@@ -33,7 +33,7 @@ pub struct Tab {
     pub panes: Vec<View>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Pos {
     // TODO(mem): Check the num size is large enough and as small as possible.
     pub column: Index,
@@ -45,6 +45,15 @@ pub struct Rect {
     pub start: Pos,
     pub columns: Index,
     pub rows: Index,
+}
+
+impl Rect {
+    pub fn dims(&self) -> Pos {
+        Pos {
+            column: self.columns,
+            row: self.rows,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

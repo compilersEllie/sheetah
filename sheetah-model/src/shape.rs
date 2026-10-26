@@ -1,4 +1,4 @@
-use crate::value::ValueInfo;
+use crate::{editor::{Index, Pos}, value::ValueInfo};
 use anyhow::{Result, bail};
 use stable_hash::{FieldAddress, StableHash, StableHasher, impl_stable_hash};
 
@@ -36,6 +36,15 @@ impl_stable_hash!(Shape {
 });
 
 impl Shape {
+
+    #[inline]
+    pub fn dims(&self) -> Pos {
+        Pos {
+            column: self.columns.len(),
+            row: self.rows.len(),
+        }
+    }
+
     pub fn add_field(&mut self, info: FieldInfo) -> Result<()> {
         self.fields.push(info);
         Ok(())
@@ -52,6 +61,17 @@ pub struct Dimension {
 impl_stable_hash!(Dimension { order, sort });
 
 impl Dimension {
+
+    #[inline]
+    pub fn len(&self) -> Index {
+        self.order.len() as Index
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.order.is_empty()
+    }
+
     pub fn add(&mut self, index: Option<usize>, id: FieldId) -> Result<()> {
         if let Some(index) = index {
             self.order.insert(index, id);

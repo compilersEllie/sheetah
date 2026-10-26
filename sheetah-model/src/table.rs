@@ -1,4 +1,4 @@
-use crate::optic::OpticId;
+use crate::{editor::Pos, optic::OpticId};
 use crate::shape::Shape;
 use byteorder::{BigEndian, ByteOrder};
 use stable_hash::{StableHash, StableHasher, crypto::CryptoStableHasher, impl_stable_hash};
@@ -65,5 +65,10 @@ impl Table {
 
     pub fn name(&self) -> &Option<TableName> {
         &self.name
+    }
+
+    #[inline]
+    pub fn dims(&self) -> Pos {
+        self.shape.dims()
     }
 }
