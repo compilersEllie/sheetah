@@ -37,9 +37,20 @@ pub trait Backend: Debug + Send + Sync {
 
     async fn get_data<'a>(&'a self, view: &View) -> Result<Values2DRef<'a>>;
 
-    async fn set_data<'a, 'b>(&'a mut self, table: TableId, pos: &Pos, data: Values2D) -> Result<()>;
-    async fn add_row<'a>(&'a mut self, table: TableId, row_index: Index, row: Values) -> Result<()>;
-    async fn add_column<'a>(&'a mut self, table: TableId, column_index: Index, column_transposed: Values) -> Result<()>;
+    async fn set_data<'a, 'b>(
+        &'a mut self,
+        table: TableId,
+        pos: &Pos,
+        data: Values2D,
+    ) -> Result<()>;
+    async fn add_row<'a>(&'a mut self, table: TableId, row_index: Index, row: Values)
+    -> Result<()>;
+    async fn add_column<'a>(
+        &'a mut self,
+        table: TableId,
+        column_index: Index,
+        column_transposed: Values,
+    ) -> Result<()>;
 
     /// Setup files for thee backend.
     async fn setup(&mut self) -> Result<()>;

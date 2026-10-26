@@ -1,5 +1,5 @@
-use crate::{editor::Pos, optic::OpticId};
 use crate::shape::Shape;
+use crate::{editor::Pos, optic::OpticId};
 use byteorder::{BigEndian, ByteOrder};
 use stable_hash::{StableHash, StableHasher, crypto::CryptoStableHasher, impl_stable_hash};
 use std::collections::HashMap;
