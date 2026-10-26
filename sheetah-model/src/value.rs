@@ -2,6 +2,9 @@ use crate::optic::OpticId;
 use stable_hash::{StableHash, StableHasher, impl_stable_hash};
 use std::any::{Any, TypeId};
 use std::fmt::Debug;
+use std::sync::Arc;
+
+pub type Values = Vec<Arc<dyn Value>>;
 
 #[typetag::serde(tag = "type")]
 pub trait Value: Debug + Sync + Send + 'static {
