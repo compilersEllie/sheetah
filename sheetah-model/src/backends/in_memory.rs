@@ -1,8 +1,8 @@
 use crate::backend::BackendOptions;
 use crate::backend::{Backend, BackendKind};
-use crate::editor::{Index, Rect, View};
+use crate::editor::{Index, Pos, View};
 use crate::table::{Table, TableId};
-use crate::value::{Value, Values};
+use crate::value::{Values, Values2D, Values2DRef};
 use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -10,14 +10,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-#[derive(Debug, Clone)]
-pub struct InMemoryRow {
-    columns: Values,
-}
-#[derive(Debug, Clone)]
-pub struct InMemoryTable {
-    rows: Vec<InMemoryRow>,
-}
+pub type InMemoryTable = Values2D;
 
 #[derive(Debug)]
 pub struct InMemoryBackend {
@@ -61,47 +54,109 @@ impl Backend for InMemoryBackend {
         Ok(table_info)
     }
 
-    async fn get_data<'a>(&'a self, view: &View) -> Result<Vec<Vec<&'a Arc<dyn Value>>>> {
-        let View {table, cursor: _, window, text_start: _, text_length: _, selected: _ } = view;
-        let table_data = self.table_data
+    async fn get_data<'a>(&'a self, view: &View) -> Result<Values2DRef> {
+        let View {
+            table,
+            cursor: _,
+            window,
+            text_start: _,
+            text_length: _,
+            selected: _,
+        } = view;
+        let table_data = self
+            .table_data
             .get(table)
             .with_context(|| format!("Could not get table data for table {:?}", table))?;
+
+        let mut values = Vec::with_capacity((window.rows * window.columns) as usize);
+
         let start = &window.start;
-        let rows = start.row..start.row + window.rows;
-
-        let mut subtable = Vec::with_capacity(window.rows as usize);
-        for row in rows {
-            let source_row = &table_data.rows[row as usize];
-            let mut row_data = Vec::with_capacity(window.columns as usize);
-            let cols = start.column..start.column + window.columns;
-            for col in cols {
-                row_data.push(&source_row.columns[col as usize]);
+        for row in start.row..start.row + window.rows {
+            for col in start.column..start.column + window.columns {
+                values.push(table_data.get(col, row)?);
             }
-            subtable.push(row_data);
         }
-        Ok(subtable)
-    }
-    async fn set_data<'a>(&'a self, _window: &Rect, _data: Vec<Vec<Arc<dyn Value>>>) -> Result<()> {
-        todo!()
+        Values2DRef::new(window.columns, window.rows, values)
     }
 
-    async fn add_data_row<'a>(&'a self, _row_index: Index, _row: Values) -> Result<()> {
-        todo!()
+    async fn set_data<'a, 'b>(
+        &'a mut self,
+        table: TableId,
+        pos: &Pos,
+        data: Values2D,
+    ) -> Result<()> {
+        let table_info = self.get(&table).await?;
+
+        if pos.column + data.columns() >= table_info.dims().column {
+            bail!(
+                "New data at ({}, {}) with dimensions ({}, {}) has too many columns for table {:?} with dimensions ({}, {})",
+                pos.column,
+                pos.row,
+                data.columns(),
+                data.rows(),
+                table,
+                table_info.dims().column,
+                table_info.dims().row
+            );
+        }
+
+        if pos.row + data.rows() >= table_info.dims().row {
+            bail!(
+                "New data at ({}, {}) with dimensions ({}, {}) has too many rows for table {:?} with dimensions ({}, {})",
+                pos.column,
+                pos.row,
+                data.columns(),
+                data.rows(),
+                table,
+                table_info.dims().column,
+                table_info.dims().row
+            );
+        }
+
+        let table_data = self
+            .table_data
+            .get_mut(&table)
+            .with_context(|| format!("Could not get table data for table {:?}", table))?;
+
+        for index in 0..(data.len() as u32) {
+            let cursor = data.pos(index)?;
+            table_data.set(pos.column + cursor.column, pos.row + cursor.row, data.get(cursor.column, cursor.row)?.cloned())?;
+        }
+        Ok(())
     }
 
-    async fn add_data_column<'a>(&'a self, _column_index: Index, _column_transposed: Values) -> Result<()> {
-        todo!()
+    async fn add_row<'a>(&'a mut self, table: TableId, row_index: Index, row: Values) -> Result<()> {
+        let table_data = self
+            .table_data
+            .get_mut(&table)
+            .with_context(|| format!("Could not get table data for table {:?}", table))?;
+
+        table_data.add_row(row_index, row).await
     }
 
-    async fn insert(&mut self, table_id: TableId, table: Table) -> Result<()> {
-        if self.tables.contains_key(&table_id) {
+    async fn add_column<'a>(
+        &'a mut self,
+        table: TableId,
+        column_index: Index,
+        column: Values,
+    ) -> Result<()> {
+        let table_data = self
+            .table_data
+            .get_mut(&table)
+            .with_context(|| format!("Could not get table data for table {:?}", table))?;
+
+        table_data.add_column(column_index, column).await
+    }
+
+    async fn insert(&mut self, table: TableId, table_info: Table) -> Result<()> {
+        if self.tables.contains_key(&table) {
             bail!(
                 "Backend {} already has table {:?}",
                 self.options.name,
-                table_id
+                table
             );
         };
-        self.tables.insert(table_id, table);
+        self.tables.insert(table, table_info);
         Ok(())
     }
 

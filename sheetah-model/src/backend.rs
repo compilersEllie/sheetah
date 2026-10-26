@@ -1,6 +1,6 @@
-use crate::editor::{Index, Rect, View};
+use crate::editor::{Index, Pos, View};
 use crate::table::{Table, TableId};
-use crate::value::{Value, Values};
+use crate::value::{Values, Values2D, Values2DRef};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
@@ -35,12 +35,11 @@ pub trait Backend: Debug + Send + Sync {
     async fn get_mut<'a>(&'a mut self, table_id: &TableId) -> Result<&'a mut Table>;
     async fn insert(&mut self, table_id: TableId, table: Table) -> Result<()>;
 
-    async fn get_data<'a>(&'a self, view: &View) -> Result<Vec<Vec<&'a Arc<dyn Value>>>>;
+    async fn get_data<'a>(&'a self, view: &View) -> Result<Values2DRef<'a>>;
 
-    async fn set_data<'a>(&'a self, window: &Rect, data: Vec<Vec<Arc<dyn Value>>>) -> Result<()>;
-
-    async fn add_data_row<'a>(&'a self, row_index: Index, row: Values) -> Result<()>;
-    async fn add_data_column<'a>(&'a self, column_index: Index, column_transposed: Values) -> Result<()>;
+    async fn set_data<'a, 'b>(&'a mut self, table: TableId, pos: &Pos, data: Values2D) -> Result<()>;
+    async fn add_row<'a>(&'a mut self, table: TableId, row_index: Index, row: Values) -> Result<()>;
+    async fn add_column<'a>(&'a mut self, table: TableId, column_index: Index, column_transposed: Values) -> Result<()>;
 
     /// Setup files for thee backend.
     async fn setup(&mut self) -> Result<()>;

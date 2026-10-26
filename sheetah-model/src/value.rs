@@ -1,10 +1,9 @@
+use crate::editor::{Index, Pos};
 use crate::optic::OpticId;
+use anyhow::{Result, bail};
 use stable_hash::{StableHash, StableHasher, impl_stable_hash};
 use std::any::{Any, TypeId};
 use std::fmt::Debug;
-use std::sync::Arc;
-
-pub type Values = Vec<Arc<dyn Value>>;
 
 #[typetag::serde(tag = "type")]
 pub trait Value: Debug + Sync + Send + 'static {
@@ -237,5 +236,188 @@ impl ValueInfo {
 
     pub fn reset_format(&mut self) {
         self.chosen_format = None;
+    }
+}
+
+pub type Values = Vec<Box<dyn Value>>;
+
+#[derive(Debug)]
+pub struct Values2D {
+    values: Vec<Box<dyn Value>>,
+    columns: Index,
+}
+
+impl Values2D {
+    pub fn new(columns: Index, rows: Index, values: Vec<Box<dyn Value>>) -> Result<Self> {
+        if (columns * rows) as usize != values.len() {
+            bail!(
+                "Dimensions of values do not match: {} x {} != {}",
+                columns,
+                rows,
+                values.len()
+            );
+        }
+        Ok(Self { values, columns })
+    }
+
+    #[inline]
+    pub fn get(&self, column: Index, row: Index) -> Result<&dyn Value> {
+        let ind = self.index(column, row)? as usize;
+        Ok(&self.values[ind])
+    }
+
+    #[inline]
+    pub fn set(&mut self, column: Index, row: Index, value: Box<dyn Value>) -> Result<()> {
+        let ind = self.index(column, row)? as usize;
+        self.values[ind] = value;
+        Ok(())
+    }
+
+    pub async fn add_row(&mut self, row_index: Index, mut values: Values) -> Result<()> {
+        let new_size = ((self.rows()+1)*self.columns()) as usize;
+        let mut new_data = Vec::with_capacity(new_size);
+        for row in 0..(self.rows()+1) {
+            for _column in 0..(self.columns()) {
+                if row == row_index {
+                    new_data.push(values.pop().unwrap());
+                } else {
+                    new_data.push(self.values.pop().unwrap());
+                }
+            }
+        }
+        self.values = new_data;
+        Ok(())
+    }
+
+    pub async fn add_column(&mut self, column_index: Index, mut values: Values) -> Result<()> {
+        let new_size = (self.rows()*(self.columns()+1)) as usize;
+        let mut new_data = Vec::with_capacity(new_size);
+        for _row in 0..self.rows() {
+            for column in 0..(self.columns()+1) {
+                if column == column_index {
+                    new_data.push(values.pop().unwrap());
+                } else {
+                    new_data.push(self.values.pop().unwrap());
+                }
+            }
+        }
+        self.values = new_data;
+        Ok(())
+    }
+
+    #[inline]
+    pub fn pos(&self, index: Index) -> Result<Pos> {
+        if index >= self.len() as Index {
+            bail!("Index {} out of range 0..{}", index, self.len());
+        }
+        Ok(Pos {
+            column: index / self.columns,
+            row: index % self.columns,
+        })
+    }
+
+    #[inline]
+    pub fn index(&self, column: Index, row: Index) -> Result<Index> {
+        if row >= self.rows() {
+            bail!("Row {} out of range 0..{}", row, self.rows());
+        }
+        if column >= self.columns() {
+            bail!("Column {} out of range 0..{}", column, self.columns());
+        }
+        Ok(row * self.columns + column)
+    }
+
+    #[inline]
+    pub fn columns(&self) -> Index {
+        self.columns
+    }
+
+    #[inline]
+    pub fn rows(&self) -> Index {
+        (self.len() as Index) / self.columns
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.values.is_empty()
+    }
+
+    #[inline]
+    pub fn dims(&self) -> Pos {
+        Pos {
+            column: self.columns(),
+            row: self.rows(),
+        }
+    }
+}
+
+pub struct Values2DRef<'a> {
+    values: Vec<&'a dyn Value>,
+    columns: Index,
+}
+
+impl<'a> Values2DRef<'a> {
+    pub fn new(columns: Index, rows: Index, values: Vec<&'a dyn Value>) -> Result<Self> {
+        if (columns * rows) as usize != values.len() {
+            bail!(
+                "Dimensions of values do not match: {} x {} != {}",
+                columns,
+                rows,
+                values.len()
+            );
+        }
+        Ok(Self { values, columns })
+    }
+
+    #[inline]
+    pub fn get(&self, column: Index, row: Index) -> &dyn Value {
+        let ind = self.index(column, row) as usize;
+        self.values[ind]
+    }
+
+    #[inline]
+    pub fn pos(&self, index: Index) -> Pos {
+        Pos {
+            column: index / self.columns,
+            row: index % self.columns,
+        }
+    }
+
+    #[inline]
+    pub fn index(&self, column: Index, row: Index) -> Index {
+        row * self.columns + column
+    }
+
+    #[inline]
+    pub fn columns(&self) -> Index {
+        self.columns
+    }
+
+    #[inline]
+    pub fn rows(&self) -> Index {
+        (self.len() as Index) / self.columns
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.values.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.values.is_empty()
+    }
+
+    #[inline]
+    pub fn dims(&self) -> Pos {
+        Pos {
+            column: self.columns(),
+            row: self.rows(),
+        }
     }
 }
