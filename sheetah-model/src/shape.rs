@@ -49,7 +49,7 @@ impl Shape {
         self.fields.push(info);
         Ok(())
     }
-    // TODO(feat): Calculate the remainder (fields and types) for each cell.
+    // TODO(feat): Calculate the remainder, fields and their types, after taking out columns and rows, for each cell. #2
 }
 
 #[derive(Default, Clone, Debug)]
