@@ -5,71 +5,128 @@ on: [push]
 env:
   CARGO_TERM_COLOR: always
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   rust:
     name: rust CI ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    outputs:
+      rust_stable: ${{ steps.toolchains.outputs.rust_stable }}
+      rust_nightly: ${{ steps.toolchains.outputs.rust_nightly }}
     strategy:
       matrix:
         os: [ubuntu-latest] #, windows-latest]
-
     steps:
-    - uses: actions/checkout@v6
-    - name: Run sccache-cache
-      uses: mozilla-actions/sccache-action@v0.0.11
-    - name: Refresh apt package lists
-      run: sudo apt-get update
-    - uses: awalsh128/cache-apt-pkgs-action@latest
-      with:
-        packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libglib2.0-dev
-        version: 1.2
-    - uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: ${{ needs.rust.outputs.rust_stable }}
-        components: rustfmt, clippy
-    # - uses: cargo-bins/cargo-binstall@main
-    - name: Clippy
-      run: cargo clippy --all-features -- -D warnings
-    - name: Format
-      run: cargo fmt --all -- --check
+    - id: toolchains
+      run: |
+        echo "rust_stable=1.94.0" >> "$GITHUB_OUTPUT"
+        echo "rust_nightly=nightly-2026-05-01" >> "$GITHUB_OUTPUT"
 
-    - name: Run tests (dev)
-      if: github.event.pull_request.merged == false
-      run: cargo test --locked --verbose
-    - name: Run ignored tests (dev)
-      continue-on-error: true
-      if: github.event.pull_request.merged == false
-      run: cargo test --locked --verbose -- --ignored
+  lint:
+    needs: rust
+    name: rust lint CI ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest] #, windows-latest]
+    steps:
+      - name: Refresh apt package lists
+        run: sudo apt-get update
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libglib2.0-dev
+          version: 1.2
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ needs.rust.outputs.rust_stable }}
+          components: rustfmt, clippy
+      # - uses: cargo-bins/cargo-binstall@main
+      - name: Clippy
+        run: cargo clippy --all-features -- -D warnings
+      - name: Format
+        run: cargo fmt --all -- --check
 
-    - name: Run tests (release)
-      if: github.event.pull_request.merged == true
-      run: cargo test --locked --release --verbose
-    - name: Run ignored tests (release)
-      if: github.event.pull_request.merged == true
-      run: cargo test --locked --release --verbose -- --ignored
+  tests:
+    needs: rust
+    name: rust test CI ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest] #, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.11
+      - name: Refresh apt package lists
+        run: sudo apt-get update
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libglib2.0-dev
+          version: 1.2
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ needs.rust.outputs.rust_stable }}
+          components: rustfmt, clippy
+      - name: Run tests (dev)
+        if: github.event.pull_request.merged == false
+        run: cargo test --locked --verbose
+      - name: Run ignored tests (dev)
+        continue-on-error: true
+        if: github.event.pull_request.merged == false
+        run: cargo test --locked --verbose -- --ignored
 
-    - name: Build (dev)
-      if: github.event.pull_request.merged == false
-      run: cargo build --locked --verbose
-    - name: Build (release)
-      if: github.event.pull_request.merged == true
-      run: cargo build --locked --release --verbose
+      - name: Run tests (release)
+        if: github.event.pull_request.merged == true
+        run: cargo test --locked --release --verbose
+      - name: Run ignored tests (release)
+        if: github.event.pull_request.merged == true
+        run: cargo test --locked --release --verbose -- --ignored
 
-    - name: Upload executable Linux
-      if: github.ref == 'refs/heads/master' && runner.os == 'Linux'
-      uses: actions/upload-artifact@v7
-      with:
-        name: rust
-        path: ./target/release/*
-        overwrite: true
-        archive: true
-        if-no-files-found: error
-    - name: Upload executable Windows
-      if: github.ref == 'refs/heads/master' && runner.os == 'Windows'
-      uses: actions/upload-artifact@v7
-      with:
-        name: rust.exe
-        path: ./target/release/*.exe
-        overwrite: true
-        archive: true
-        if-no-files-found: error
+  tests:
+    needs: rust
+    name: rust build CI ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest] #, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.11
+      - name: Refresh apt package lists
+        run: sudo apt-get update
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libglib2.0-dev
+          version: 1.2
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ needs.rust.outputs.rust_stable }}
+      - name: Build (dev)
+        if: github.event.pull_request.merged == false
+        run: cargo build --locked --verbose
+      - name: Build (release)
+        if: github.event.pull_request.merged == true
+        run: cargo build --locked --release --verbose
+
+      - name: Upload executable Linux
+        if: github.ref == 'refs/heads/master' && runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: rust
+          path: ./target/release/*
+          overwrite: true
+          archive: true
+          if-no-files-found: error
+      - name: Upload executable Windows
+        if: github.ref == 'refs/heads/master' && runner.os == 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: rust.exe
+          path: ./target/release/*.exe
+          overwrite: true
+          archive: true
+          if-no-files-found: error
