@@ -171,7 +171,7 @@ impl Value for Box<dyn Value> {
     }
 
     fn bytes(&self) -> Vec<u8> {
-        (&**self).bytes()
+        (**self).bytes()
     }
 }
 
