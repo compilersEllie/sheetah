@@ -43,6 +43,7 @@ jobs:
       with:
         toolchain: ${{ needs.rust.outputs.rust_stable }}
         components: rustfmt, clippy
+    - uses: actions/checkout@v6
     - name: Clippy
       run: cargo clippy --all-features -- -D warnings
     - name: Format
