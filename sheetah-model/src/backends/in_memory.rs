@@ -70,10 +70,11 @@ impl Backend for InMemoryBackend {
 
         let mut values = Vec::with_capacity((window.rows * window.columns) as usize);
 
-        let start = &window.start;
-        for row in start.row..start.row + window.rows {
-            for col in start.column..start.column + window.columns {
-                values.push(table_data.get(col, row)?);
+        let start_row = window.start.row.raw();
+        let start_col = window.start.column.raw();
+        for row in start_row..start_row + window.rows.raw() {
+            for col in start_col..start_col + window.columns.raw() {
+                values.push(table_data.get(Index::new(col), Index::new(row))?);
             }
         }
         Values2DRef::new(window.columns, window.rows, values)
@@ -89,27 +90,21 @@ impl Backend for InMemoryBackend {
 
         if pos.column + data.columns() >= table_info.dims().column {
             bail!(
-                "New data at ({}, {}) with dimensions ({}, {}) has too many columns for table {:?} with dimensions ({}, {})",
-                pos.column,
-                pos.row,
-                data.columns(),
-                data.rows(),
+                "New data at {} with dimensions {} has too many columns for table {:?} with dimensions {}",
+                pos,
+                data.dims(),
                 table,
-                table_info.dims().column,
-                table_info.dims().row
+                table_info.dims(),
             );
         }
 
         if pos.row + data.rows() >= table_info.dims().row {
             bail!(
-                "New data at ({}, {}) with dimensions ({}, {}) has too many rows for table {:?} with dimensions ({}, {})",
-                pos.column,
-                pos.row,
-                data.columns(),
-                data.rows(),
+                "New data at {} with dimensions {} has too many rows for table {:?} with dimensions {}",
+                pos,
+                data.dims(),
                 table,
-                table_info.dims().column,
-                table_info.dims().row
+                table_info.dims(),
             );
         }
 
@@ -119,7 +114,7 @@ impl Backend for InMemoryBackend {
             .with_context(|| format!("Could not get table data for table {:?}", table))?;
 
         for index in 0..(data.len() as u32) {
-            let cursor = data.pos(index)?;
+            let cursor = data.pos(index.into())?;
             table_data.set(
                 pos.column + cursor.column,
                 pos.row + cursor.row,

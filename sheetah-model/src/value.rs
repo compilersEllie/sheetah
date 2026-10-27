@@ -262,26 +262,33 @@ impl Values2D {
 
     #[inline]
     pub fn get(&self, column: Index, row: Index) -> Result<&dyn Value> {
-        let ind = self.index(column, row)? as usize;
+        let ind = self.index(column, row)?.raw() as usize;
         Ok(&self.values[ind])
     }
 
     #[inline]
     pub fn set(&mut self, column: Index, row: Index, value: Box<dyn Value>) -> Result<()> {
-        let ind = self.index(column, row)? as usize;
+        let ind = self.index(column, row)?.raw() as usize;
         self.values[ind] = value;
         Ok(())
     }
 
     pub async fn add_row(&mut self, row_index: Index, mut values: Values) -> Result<()> {
+        if values.len() != self.columns().raw() as usize {
+            bail!(
+                "Wrong number of values: Got {} expected {}",
+                values.len(),
+                self.columns().raw()
+            );
+        }
         let new_size = ((self.rows() + 1) * self.columns()) as usize;
         let mut new_data = Vec::with_capacity(new_size);
-        for row in 0..(self.rows() + 1) {
-            for _column in 0..(self.columns()) {
-                if row == row_index {
-                    new_data.push(values.pop().unwrap());
+        for row in 0..(self.rows().raw() + 1) {
+            for _column in 0..self.columns().raw() {
+                if row == row_index.raw() {
+                    new_data.push(values.pop().expect("Incorrect number of values"));
                 } else {
-                    new_data.push(self.values.pop().unwrap());
+                    new_data.push(self.values.pop().expect("Incorrect number of values"));
                 }
             }
         }
@@ -290,14 +297,21 @@ impl Values2D {
     }
 
     pub async fn add_column(&mut self, column_index: Index, mut values: Values) -> Result<()> {
+        if values.len() != self.rows().raw() as usize {
+            bail!(
+                "Wrong number of values: Got {} expected {}",
+                values.len(),
+                self.rows().raw()
+            );
+        }
         let new_size = (self.rows() * (self.columns() + 1)) as usize;
         let mut new_data = Vec::with_capacity(new_size);
-        for _row in 0..self.rows() {
-            for column in 0..(self.columns() + 1) {
-                if column == column_index {
-                    new_data.push(values.pop().unwrap());
+        for _row in 0..self.rows().raw() {
+            for column in 0..(self.columns().raw() + 1) {
+                if column == column_index.raw() {
+                    new_data.push(values.pop().expect("Incorrect number of values"));
                 } else {
-                    new_data.push(self.values.pop().unwrap());
+                    new_data.push(self.values.pop().expect("Incorrect number of values"));
                 }
             }
         }
@@ -307,12 +321,13 @@ impl Values2D {
 
     #[inline]
     pub fn pos(&self, index: Index) -> Result<Pos> {
-        if index >= self.len() as Index {
+        if index.raw() as usize >= self.len() {
             bail!("Index {} out of range 0..{}", index, self.len());
         }
+        // TODO(perf): Avoid divide methods
         Ok(Pos {
-            column: index / self.columns,
-            row: index % self.columns,
+            column: (index.raw() % self.columns.raw()).into(),
+            row: (index.raw() / self.columns.raw()).into(),
         })
     }
 
@@ -324,7 +339,7 @@ impl Values2D {
         if column >= self.columns() {
             bail!("Column {} out of range 0..{}", column, self.columns());
         }
-        Ok(row * self.columns + column)
+        Ok(Index::new(row * self.columns) + column)
     }
 
     #[inline]
@@ -334,7 +349,8 @@ impl Values2D {
 
     #[inline]
     pub fn rows(&self) -> Index {
-        (self.len() as Index) / self.columns
+        // TODO(perf): Avoid divide methods
+        ((self.len() as u32) / self.columns.raw()).into()
     }
 
     #[inline]
@@ -376,21 +392,22 @@ impl<'a> Values2DRef<'a> {
 
     #[inline]
     pub fn get(&self, column: Index, row: Index) -> &dyn Value {
-        let ind = self.index(column, row) as usize;
+        let ind = self.index(column, row).raw() as usize;
         self.values[ind]
     }
 
     #[inline]
     pub fn pos(&self, index: Index) -> Pos {
+        // TODO(perf): Avoid divide methods
         Pos {
-            column: index / self.columns,
-            row: index % self.columns,
+            column: (index.raw() % self.columns.raw()).into(),
+            row: (index.raw() / self.columns.raw()).into(),
         }
     }
 
     #[inline]
     pub fn index(&self, column: Index, row: Index) -> Index {
-        row * self.columns + column
+        Index::new(row * self.columns) + column
     }
 
     #[inline]
@@ -400,7 +417,8 @@ impl<'a> Values2DRef<'a> {
 
     #[inline]
     pub fn rows(&self) -> Index {
-        (self.len() as Index) / self.columns
+        // TODO(perf): Avoid divide methods
+        ((self.len() as u32) / self.columns.raw()).into()
     }
 
     #[inline]

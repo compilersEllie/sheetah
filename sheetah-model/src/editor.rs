@@ -1,8 +1,63 @@
 use crate::{table::TableId, workspace::Workspace};
 use anyhow::Result;
-use std::path::PathBuf;
+use stable_hash::impl_stable_hash;
+use std::{fmt::Display, ops::{Add, Mul}, path::PathBuf};
 
-pub type Index = u32; // Small index type for realworld use.
+// Small index type for realworld use.
+#[derive(Debug, Default, Copy, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
+pub struct Index {
+    id: u32,
+}
+
+impl_stable_hash!(Index { id });
+
+impl Index {
+    #[inline]
+    pub fn new(id: u32) -> Self {
+            Self { id }
+    }
+
+    #[inline]
+    pub fn raw(&self) -> u32 {
+        self.id
+    }
+}
+
+impl<T: Add<u32>> Add<T> for Index where <T as Add<u32>>::Output: Into<u32> {
+    type Output = Index;
+    #[inline]
+    fn add(self, other: T) -> Self::Output {
+        Self { id: (other+self.id).into() }
+    }
+}
+
+impl<T: Mul<u32>> Mul<T> for Index where <T as Mul<u32>>::Output: Into<u32> {
+    type Output = u32;
+    #[inline]
+    fn mul(self, other: T) -> Self::Output {
+        (other*self.id).into()
+    }
+}
+
+impl From<u32> for Index {
+    #[inline]
+    fn from(val: u32) -> Self {
+        Self::new(val)
+    }
+}
+
+impl Into<u32> for Index {
+    #[inline]
+    fn into(self) -> u32 {
+        self.raw()
+    }
+}
+
+impl Display for Index {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.raw())
+    }
+}
 
 // TODO(feat): An editor module with loro documents and hash trees etc. #1
 
@@ -38,6 +93,12 @@ pub struct Pos {
     // TODO(mem): Check the num size is large enough and as small as possible. #4
     pub column: Index,
     pub row: Index,
+}
+
+impl Display for Pos {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.row, self.column)
+    }
 }
 
 #[derive(Clone, Debug, Default)]

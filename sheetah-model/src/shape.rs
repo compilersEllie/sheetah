@@ -65,7 +65,7 @@ impl_stable_hash!(Dimension { order, sort });
 impl Dimension {
     #[inline]
     pub fn len(&self) -> Index {
-        self.order.len() as Index
+        (self.order.len() as u32).into()
     }
 
     #[inline]
