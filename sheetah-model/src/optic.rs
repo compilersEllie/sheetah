@@ -9,6 +9,13 @@ pub struct OpticId {
 
 impl_stable_hash!(OpticId { id });
 
+impl OpticId {
+    #[inline]
+    pub fn new(id: u128) -> Self {
+        Self { id }
+    }
+}
+
 // TODO(perf): Look into type safe type level patterns with PolyMap #2
 pub trait Optic {
     type In: Value;
