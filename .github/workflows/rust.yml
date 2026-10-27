@@ -85,7 +85,7 @@ jobs:
         if: github.event.pull_request.merged == true
         run: cargo test --locked --release --verbose -- --ignored
 
-  tests:
+  build:
     needs: rust
     name: rust build CI ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
