@@ -1,7 +1,11 @@
 use crate::{table::TableId, workspace::Workspace};
 use anyhow::Result;
 use stable_hash::impl_stable_hash;
-use std::{fmt::Display, ops::{Add, Mul}, path::PathBuf};
+use std::{
+    fmt::Display,
+    ops::{Add, Mul},
+    path::PathBuf,
+};
 
 // Small index type for realworld use.
 #[derive(Debug, Default, Copy, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
@@ -14,7 +18,7 @@ impl_stable_hash!(Index { id });
 impl Index {
     #[inline]
     pub fn new(id: u32) -> Self {
-            Self { id }
+        Self { id }
     }
 
     #[inline]
@@ -23,19 +27,27 @@ impl Index {
     }
 }
 
-impl<T: Add<u32>> Add<T> for Index where <T as Add<u32>>::Output: Into<u32> {
+impl<T: Add<u32>> Add<T> for Index
+where
+    <T as Add<u32>>::Output: Into<u32>,
+{
     type Output = Index;
     #[inline]
     fn add(self, other: T) -> Self::Output {
-        Self { id: (other+self.id).into() }
+        Self {
+            id: (other + self.id).into(),
+        }
     }
 }
 
-impl<T: Mul<u32>> Mul<T> for Index where <T as Mul<u32>>::Output: Into<u32> {
+impl<T: Mul<u32>> Mul<T> for Index
+where
+    <T as Mul<u32>>::Output: Into<u32>,
+{
     type Output = u32;
     #[inline]
     fn mul(self, other: T) -> Self::Output {
-        (other*self.id).into()
+        (other * self.id).into()
     }
 }
 
