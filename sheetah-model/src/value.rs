@@ -274,48 +274,70 @@ impl Values2D {
     }
 
     pub async fn add_row(&mut self, row_index: Index, mut values: Values) -> Result<()> {
-        if values.len() != self.columns().raw() as usize {
+        let cols = self.columns().raw() as usize;
+        if values.len() != cols {
             bail!(
                 "Wrong number of values: Got {} expected {}",
                 values.len(),
-                self.columns().raw()
+                cols
             );
         }
-        let new_size = ((self.rows() + 1) * self.columns()) as usize;
-        let mut new_data = Vec::with_capacity(new_size);
-        for row in 0..(self.rows().raw() + 1) {
-            for _column in 0..self.columns().raw() {
-                if row == row_index.raw() {
-                    new_data.push(values.pop().expect("Incorrect number of values"));
-                } else {
-                    new_data.push(self.values.pop().expect("Incorrect number of values"));
+        let target_row = row_index.raw() as usize;
+        let old_rows = self.rows().raw() as usize;
+        if target_row > old_rows {
+            bail!("Row index {} out of range 0..{}", target_row, old_rows);
+        }
+
+        let mut new_values = Vec::with_capacity((old_rows + 1) * cols);
+        let mut values_iter = values.into_iter();
+        let old_values = std::mem::take(&mut self.values);
+        let mut old_values_iter = old_values.into_iter();
+
+        for r in 0..=old_rows {
+            if r == target_row {
+                for _ in 0..cols {
+                    new_values.push(values_iter.next().unwrap());
+                }
+            } else {
+                for _ in 0..cols {
+                    new_values.push(old_values_iter.next().unwrap());
                 }
             }
         }
-        self.values = new_data;
+        self.values = new_values;
         Ok(())
     }
 
     pub async fn add_column(&mut self, column_index: Index, mut values: Values) -> Result<()> {
-        if values.len() != self.rows().raw() as usize {
+        let rows = self.rows().raw() as usize;
+        let cols = self.columns().raw() as usize;
+        if values.len() != rows {
             bail!(
                 "Wrong number of values: Got {} expected {}",
                 values.len(),
-                self.rows().raw()
+                rows
             );
         }
-        let new_size = (self.rows() * (self.columns() + 1)) as usize;
-        let mut new_data = Vec::with_capacity(new_size);
-        for _row in 0..self.rows().raw() {
-            for column in 0..(self.columns().raw() + 1) {
-                if column == column_index.raw() {
-                    new_data.push(values.pop().expect("Incorrect number of values"));
+        let target_col = column_index.raw() as usize;
+        if target_col > cols {
+            bail!("Column index {} out of range 0..{}", target_col, cols);
+        }
+
+        let mut new_values = Vec::with_capacity(rows * (cols + 1));
+        let mut new_col_iter = values.into_iter();
+        let old_values = std::mem::take(&mut self.values);
+        let mut old_values_iter = old_values.into_iter();
+
+        for _r in 0..rows {
+            for c in 0..=(cols) {
+                if c == target_col {
+                    new_values.push(new_col_iter.next().unwrap());
                 } else {
-                    new_data.push(self.values.pop().expect("Incorrect number of values"));
+                    new_values.push(old_values_iter.next().unwrap());
                 }
             }
         }
-        self.values = new_data;
+        self.values = new_values;
         Ok(())
     }
 
