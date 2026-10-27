@@ -163,15 +163,15 @@ impl Value for String {
 #[typetag::serde]
 impl Value for Box<dyn Value> {
     fn name(&self) -> String {
-        (self as &dyn Value).name()
+        (&**self as &dyn Value).name()
     }
 
     fn cloned(&self) -> Box<dyn Value> {
-        Box::new((self as &dyn Value).cloned())
+        Box::new((&**self as &dyn Value).cloned())
     }
 
     fn bytes(&self) -> Vec<u8> {
-        (self.as_ref()).bytes()
+        (&**self).bytes()
     }
 }
 
