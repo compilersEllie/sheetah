@@ -46,10 +46,10 @@ impl From<u32> for Index {
     }
 }
 
-impl Into<u32> for Index {
+impl From<Index> for u32 {
     #[inline]
-    fn into(self) -> u32 {
-        self.raw()
+    fn from(val: Index) -> u32 {
+        val.raw()
     }
 }
 
