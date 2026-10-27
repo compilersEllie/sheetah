@@ -84,7 +84,7 @@ impl Value for i32 {
 #[typetag::serde]
 impl Value for i64 {
     fn name(&self) -> String {
-        "integer (i32)".to_string()
+        "integer (i64)".to_string()
     }
 
     fn cloned(&self) -> Box<dyn Value> {
