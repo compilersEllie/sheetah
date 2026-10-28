@@ -3,7 +3,7 @@ use crate::editor::{Index, Pos, View};
 use crate::error::{Result, SheetahError};
 use crate::shape::FieldId;
 use crate::table::{Table, TableId};
-use crate::value::{Value, Values, Values2D, Values2DRef};
+use crate::value::{Value, ValueStorage, Values, Values2D, Values2DRef};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -176,18 +176,18 @@ impl Backend for InMemoryBackend {
         Ok(())
     }
 
-    async fn insert(&mut self, table: TableId, table_info: Table) -> Result<()> {
+    async fn insert_table(&mut self, table: TableId, table_info: Table) -> Result<()> {
         if self.tables.contains_key(&table) {
             return Err(SheetahError::DuplicateTable(None));
         }
 
         let dims = table_info.dims();
         let num_elements = (dims.column.raw() * dims.row.raw()) as usize;
-        let mut values: Vec<Box<dyn Value>> = Vec::with_capacity(num_elements);
+        let mut values: Vec<ValueStorage> = Vec::with_capacity(num_elements);
         for _ in 0..num_elements {
-            values.push(Box::new(0i32));
+            values.push(ValueStorage::Other(Box::new(0i32)));
         }
-        let table_data = Values2D::new(dims.column, dims.row, values)?;
+        let table_data = Values2D::new(dims.column, dims.row, Values::new(table_info.shape, values))?;
 
         self.tables.insert(table, table_info);
         self.table_data.insert(table, table_data);
@@ -319,6 +319,8 @@ mod tests {
     async fn test_backend_set_data() -> Result<()> {
         let mut backend = setup_backend();
         let table_id = TableId::new(1);
+        let table = Table::unnamed();
+        backend.insert(table_id, table).await?;
 
         let table_data = Values2D::new(
             Index::new(2),
@@ -386,6 +388,7 @@ mod tests {
         assert_eq!(updated_data.rows(), Index::new(2));
         Ok(())
     }
+
 
     #[tokio::test]
     async fn test_get_direct() -> Result<()> {
@@ -493,6 +496,38 @@ mod tests {
         };
         let mut backend = InMemoryBackend::new(options);
         backend.destroy().await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_backend_add_column() -> Result<()> {
+        let mut backend = setup_backend();
+        let table_id = TableId::new(1);
+        let table_data = Values2D::new(
+            Index::new(2),
+            Index::new(2),
+            vec![
+                Box::new(1i32),
+                Box::new(2i32),
+                Box::new(3i32),
+                Box::new(4i32),
+            ],
+        )?;
+
+        let mut table = Table::unnamed();
+        table.shape.columns.add(None, 1)?;
+        table.shape.columns.add(None, 2)?;
+        table.shape.rows.add(None, 3)?;
+        table.shape.rows.add(None, 4)?;
+        backend.insert(table_id, table).await?;
+
+        backend.table_data.insert(table_id, table_data); // TODO: Direct access like this is not allowed.
+
+        let col: Values = vec![Box::new(5i32), Box::new(6i32)];
+        backend.add_column(table_id, 5, Index::new(1), col).await?;
+
+        let updated_data = backend.table_data.get(&table_id).unwrap(); // TODO: Direct access like this is not allowed.
+        assert_eq!(updated_data.columns(), Index::new(3));
         Ok(())
     }
 }

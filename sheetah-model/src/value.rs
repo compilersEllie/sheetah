@@ -1,7 +1,6 @@
 use crate::editor::{Index, Pos};
 use crate::error::{Result, SheetahError};
 use crate::optic::OpticId;
-use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 use smol_str::SmolStr;
 use stable_hash::{StableHash, StableHasher, impl_stable_hash};
@@ -317,10 +316,12 @@ pub struct Values {
 }
 
 impl Values {
+    // TODO(perf): Don't use a vec here or we lose the benefits of Xar #1
     pub fn new(shape: Vec<Index>, data: Vec<ValueStorage>) -> Result<Self> {
         let len = shape.iter().map(|i| i.raw() as usize).product();
         if len != data.len() {
-            bail!("Dimension mismatch: shape product {} != data length {}", len, data.len());
+            // TODO(error): Specialise the errors a little better. #2
+            return Err(SheetahError::InternalError(format!("Dimension mismatch: shape product {} != data length {}", len, data.len())));
         }
 
         let mut strides = vec![1; shape.len()];
@@ -335,22 +336,25 @@ impl Values {
         })
     }
 
-    pub fn get(&self, indices: &[Index]) -> Result<&ValueStorage> {
+    pub fn get(&self, indicies: &[Index]) -> Result<&ValueStorage> {
         let mut offset = 0;
-        for (i, &idx) in indices.iter().enumerate() {
+        for (i, &idx) in indicies.iter().enumerate() {
             if i >= self.shape.len() || idx.raw() >= self.shape[i].raw() {
-                bail!("Index out of bounds");
+                return Err(SheetahError::InvalidIndex(idx, self.shape[i]));
             }
             offset += idx.raw() as usize * self.strides[i];
         }
-        Ok(&self.data.get(offset))
+        let Some(value) = &self.data.get(offset) else {
+            return Err(SheetahError::InternalError(format!("Index out of bounds: {:?} for {:?}", indicies, self.shape)));
+        };
+        Ok(value)
     }
 
     pub fn set(&mut self, indices: &[Index], value: ValueStorage) -> Result<()> {
         let mut offset = 0;
         for (i, &idx) in indices.iter().enumerate() {
             if i >= self.shape.len() || idx.raw() >= self.shape[i].raw() {
-                bail!("Index out of bounds");
+                return Err(SheetahError::InternalError(format!("Index out of bounds")));
             }
             offset += idx.raw() as usize * self.strides[i];
         }
@@ -366,77 +370,16 @@ impl Values {
         self.data.len()
     }
 }
-
-pub type ValueVec = Vec<Box<dyn Value>>;
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub struct Values {
-    data: Xar<ValueStorage>,
-    shape: Vec<Index>,
-    strides: Vec<usize>,
-}
-
-impl Values {
-    pub fn new(shape: Vec<Index>, data: Vec<ValueStorage>) -> Result<Self> {
-        let len = shape.iter().map(|i| i.raw() as usize).product();
-        if len != data.len() {
-            bail!("Dimension mismatch: shape product {} != data length {}", len, data.len());
-        }
-
-        let mut strides = vec![1; shape.len()];
-        for i in (0..shape.len() - 1).rev() {
-            strides[i] = strides[i + 1] * shape[i + 1].raw() as usize;
-        }
-
-        Ok(Self {
-            data: Xar::new(data),
-            shape,
-            strides,
-        })
-    }
-
-    pub fn get(&self, indices: &[Index]) -> Result<&ValueStorage> {
-        let mut offset = 0;
-        for (i, &idx) in indices.iter().enumerate() {
-            if i >= self.shape.len() || idx.raw() >= self.shape[i].raw() {
-                bail!("Index out of bounds");
-            }
-            offset += idx.raw() as usize * self.strides[i];
-        }
-        Ok(&self.data.get(offset))
-    }
-
-    pub fn set(&mut self, indices: &[Index], value: ValueStorage) -> Result<()> {
-        let mut offset = 0;
-        for (i, &idx) in indices.iter().enumerate() {
-            if i >= self.shape.len() || idx.raw() >= self.shape[i].raw() {
-                bail!("Index out of bounds");
-            }
-            offset += idx.raw() as usize * self.strides[i];
-        }
-        self.data.set(offset, value);
-        Ok(())
-    }
-
-    pub fn shape(&self) -> &[Index] {
-        &self.shape
-    }
-
-    pub fn len(&self) -> usize {
-        self.data.len()
-    }
-}
-
-pub type ValueVec = Vec<Box<dyn Value>>;
-
-#[derive(Default, Debug)]
 pub struct Values2D {
-    pub values: Vec<Box<dyn Value>>,
+    // TODO(cleanup): Remove this datatype entirely.
+    pub values: Values,
     pub columns: Index,
 }
 
 impl Values2D {
-    pub fn new(columns: Index, rows: Index, values: Vec<Box<dyn Value>>) -> Result<Self> {
+    pub fn new(columns: Index, rows: Index, values: Values) -> Result<Self> {
         if ((columns * rows) as usize) != values.len() {
             return Err(SheetahError::InternalError(format!(
                 "Dimensions of values do not match: {} x {} != {}",
