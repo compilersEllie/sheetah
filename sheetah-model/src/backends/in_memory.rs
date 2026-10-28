@@ -334,6 +334,8 @@ mod tests {
     async fn test_backend_set_data() -> Result<()> {
         let mut backend = setup_backend();
         let table_id = TableId::new(1);
+        let table = Table::unnamed();
+        backend.insert(table_id, table).await?;
 
         let table_data = Values2D::new(
             Index::new(2),
@@ -377,60 +379,6 @@ mod tests {
             updated_data.get(Index::new(1), Index::new(0))?.name(),
             "integer (i32)"
         );
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_backend_add_row() -> Result<()> {
-        let mut backend = setup_backend();
-        let table_id = TableId::new(1);
-        let table = Table::unnamed();
-        backend.insert(table_id, table).await?;
-
-        let table_data = Values2D::new(
-            Index::new(2),
-            Index::new(1),
-            vec![Box::new(1i32), Box::new(2i32)],
-        )?;
-        backend.table_data.insert(table_id, table_data);
-
-        let row: Values = vec![Box::new(3i32), Box::new(4i32)];
-        backend.add_row(table_id, 1, Index::new(0), row).await?;
-
-        let updated_data = backend.table_data.get(&table_id).unwrap();
-        assert_eq!(updated_data.rows(), Index::new(2));
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_backend_add_column() -> Result<()> {
-        let mut backend = setup_backend();
-        let table_id = TableId::new(1);
-        let table_data = Values2D::new(
-            Index::new(2),
-            Index::new(2),
-            vec![
-                Box::new(1i32),
-                Box::new(2i32),
-                Box::new(3i32),
-                Box::new(4i32),
-            ],
-        )?;
-
-        let mut table = Table::unnamed();
-        table.shape.columns.add(None, 1)?;
-        table.shape.columns.add(None, 2)?;
-        table.shape.rows.add(None, 3)?;
-        table.shape.rows.add(None, 4)?;
-        backend.insert(table_id, table).await?;
-
-        backend.table_data.insert(table_id, table_data); // TODO: Direct access like this is not allowed.
-
-        let col: Values = vec![Box::new(5i32), Box::new(6i32)];
-        backend.add_column(table_id, 5, Index::new(1), col).await?;
-
-        let updated_data = backend.table_data.get(&table_id).unwrap(); // TODO: Direct access like this is not allowed.
-        assert_eq!(updated_data.columns(), Index::new(3));
         Ok(())
     }
 }

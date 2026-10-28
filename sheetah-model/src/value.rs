@@ -36,7 +36,7 @@ impl StableHash for &dyn Value {
 }
 
 #[repr(align(32))]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum ValueStorage {
     None,
     I8(i8),
@@ -369,73 +369,13 @@ impl Values {
 pub type ValueVec = Vec<Box<dyn Value>>;
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub struct Values {
-    data: Xar<ValueStorage>,
-    shape: Vec<Index>,
-    strides: Vec<usize>,
-}
-
-impl Values {
-    pub fn new(shape: Vec<Index>, data: Vec<ValueStorage>) -> Result<Self> {
-        let len = shape.iter().map(|i| i.raw() as usize).product();
-        if len != data.len() {
-            bail!("Dimension mismatch: shape product {} != data length {}", len, data.len());
-        }
-
-        let mut strides = vec![1; shape.len()];
-        for i in (0..shape.len() - 1).rev() {
-            strides[i] = strides[i + 1] * shape[i + 1].raw() as usize;
-        }
-
-        Ok(Self {
-            data: Xar::new(data),
-            shape,
-            strides,
-        })
-    }
-
-    pub fn get(&self, indices: &[Index]) -> Result<&ValueStorage> {
-        let mut offset = 0;
-        for (i, &idx) in indices.iter().enumerate() {
-            if i >= self.shape.len() || idx.raw() >= self.shape[i].raw() {
-                bail!("Index out of bounds");
-            }
-            offset += idx.raw() as usize * self.strides[i];
-        }
-        Ok(&self.data.get(offset))
-    }
-
-    pub fn set(&mut self, indices: &[Index], value: ValueStorage) -> Result<()> {
-        let mut offset = 0;
-        for (i, &idx) in indices.iter().enumerate() {
-            if i >= self.shape.len() || idx.raw() >= self.shape[i].raw() {
-                bail!("Index out of bounds");
-            }
-            offset += idx.raw() as usize * self.strides[i];
-        }
-        self.data.set(offset, value);
-        Ok(())
-    }
-
-    pub fn shape(&self) -> &[Index] {
-        &self.shape
-    }
-
-    pub fn len(&self) -> usize {
-        self.data.len()
-    }
-}
-
-pub type ValueVec = Vec<Box<dyn Value>>;
-
-#[derive(Default, Debug)]
 pub struct Values2D {
-    pub values: Vec<Box<dyn Value>>,
+    pub values: ValueVec,
     pub columns: Index,
 }
 
 impl Values2D {
-    pub fn new(columns: Index, rows: Index, values: Vec<Box<dyn Value>>) -> Result<Self> {
+    pub fn new(columns: Index, rows: Index, values: ValueVec) -> Result<Self> {
         if (columns * rows) as usize != values.len() {
             bail!(
                 "Dimensions of values do not match: {} x {} != {}",
@@ -460,7 +400,7 @@ impl Values2D {
         Ok(())
     }
 
-    pub fn add_row(&mut self, row_index: Index, values: Values) -> Result<()> {
+    pub fn add_row(&mut self, row_index: Index, values: ValueVec) -> Result<()> {
         let cols = self.columns().raw() as usize;
         if values.len() != cols {
             bail!(
@@ -495,7 +435,7 @@ impl Values2D {
         Ok(())
     }
 
-    pub fn add_column(&mut self, column_index: Index, values: Values) -> Result<()> {
+    pub fn add_column(&mut self, column_index: Index, values: ValueVec) -> Result<()> {
         let rows = self.rows().raw() as usize;
         let cols = self.columns().raw() as usize;
         if values.len() != rows {
