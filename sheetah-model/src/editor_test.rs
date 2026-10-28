@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use crate::editor::{Tab, View, Pos, Rect, Index};
-    use crate::table::TableId;
+    use crate::editor::{Index, Pos, Rect, Tab, View};
     use crate::shape::Shape;
+    use crate::table::TableId;
 
     #[test]
     fn test_tab() {

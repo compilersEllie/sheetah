@@ -2,7 +2,7 @@ use crate::value::Value;
 use stable_hash::impl_stable_hash;
 use std::sync::Arc;
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, serde::Serialize, serde::Deserialize)]
 pub struct OpticId {
     pub id: u128,
 }

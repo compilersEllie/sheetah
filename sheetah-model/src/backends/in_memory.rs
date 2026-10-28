@@ -1,5 +1,4 @@
-use crate::backend::BackendOptions;
-use crate::backend::{Backend, BackendKind};
+use crate::backend::{Backend, BackendOptions, BackendKind};
 use crate::editor::{Index, Pos, View};
 use crate::shape::FieldId;
 use crate::table::{Table, TableId};
@@ -211,6 +210,218 @@ impl Backend for InMemoryBackend {
     }
 
     async fn destroy(&mut self) -> Result<()> {
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::editor::Rect;
+    use std::path::PathBuf;
+
+    fn setup_backend() -> InMemoryBackend {
+        InMemoryBackend::new(BackendOptions {
+            name: "Test Backend".to_string(),
+            version: "1.0.0".to_string(),
+            relative_path: PathBuf::from("test_path"),
+        })
+    }
+
+    #[tokio::test]
+    async fn test_backend_new() -> Result<()> {
+        let options = BackendOptions {
+            name: "test".to_string(),
+            version: "0".to_string(),
+            relative_path: PathBuf::from("."),
+        };
+        let backend = InMemoryBackend::new(options.clone());
+        assert_eq!(backend.name(), "test");
+        assert_eq!(backend.kind(), "In Memory (volatile)");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_backend_insert_get() -> Result<()> {
+        let options = BackendOptions {
+            name: "test".to_string(),
+            version: "0".to_string(),
+            relative_path: PathBuf::from("."),
+        };
+        let mut backend = InMemoryBackend::new(options);
+        let table_id = TableId::new(1);
+        let table = Table::unnamed();
+
+        backend.insert(table_id, table.clone()).await?;
+        let retrieved = backend.get(&table_id).await?;
+        assert_eq!(retrieved.name(), table.name());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_backend_insert_duplicate() {
+        let mut backend = setup_backend();
+        let table_id = TableId::new(1);
+        let table = Table::unnamed();
+
+        backend.insert(table_id, table.clone()).await.unwrap();
+        let result = backend.insert(table_id, table).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_backend_get_missing() {
+        let backend = setup_backend();
+        let result = backend.get(&TableId::new(999)).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_backend_get_data() -> Result<()> {
+        let mut backend = setup_backend();
+        let table_id = TableId::new(1);
+        let table = Table::unnamed();
+        backend.insert(table_id, table).await?;
+
+        let table_data = Values2D::new(
+            Index::new(2),
+            Index::new(2),
+            vec![
+                Box::new(1i32),
+                Box::new(2i32),
+                Box::new(3i32),
+                Box::new(4i32),
+            ],
+        )?;
+        backend.table_data.insert(table_id, table_data);
+
+        let view = View {
+            table: table_id,
+            cursor: Pos {
+                column: Index::new(0),
+                row: Index::new(0),
+            },
+            window: Rect {
+                start: Pos {
+                    column: Index::new(0),
+                    row: Index::new(0),
+                },
+                columns: Index::new(2),
+                rows: Index::new(2),
+            },
+            text_start: 0,
+            text_length: 10,
+            selected: Vec::new(),
+            shape: Default::default(),
+        };
+
+        let data = backend.get_data(&view).await?;
+        assert_eq!(data.len(), 4);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_backend_set_data() -> Result<()> {
+        let mut backend = setup_backend();
+        let table_id = TableId::new(1);
+
+        let table_data = Values2D::new(
+            Index::new(2),
+            Index::new(2),
+            vec![
+                Box::new(1i32),
+                Box::new(2i32),
+                Box::new(3i32),
+                Box::new(4i32),
+            ],
+        )?;
+
+        // TODO(bug): It should be impossible for these to get out of sync.... #2
+        let mut table = Table::unnamed();
+        let new_data = Values2D::new(Index::new(1), Index::new(1), vec![Box::new(10i32)])?;
+
+        table.shape.columns.add(None, 1)?;
+        table.shape.columns.add(None, 2)?;
+        table.shape.rows.add(None, 3)?;
+        table.shape.rows.add(None, 4)?;
+
+        assert_eq!(table.dims(), Pos { column: 2.into(), row: 2.into() });
+
+        backend.insert(table_id, table).await?;
+        backend.table_data.insert(table_id, table_data);
+
+        let pos = Pos {
+            column: Index::new(1),
+            row: Index::new(0),
+        };
+
+        backend.set_data(table_id, &pos, new_data).await?;
+        let updated_data = backend.table_data.get(&table_id).unwrap();
+        assert_eq!(
+            updated_data.get(Index::new(1), Index::new(0))?.name(),
+            "integer (i32)"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_backend_add_row() -> Result<()> {
+        let mut backend = setup_backend();
+        let table_id = TableId::new(1);
+        let table = Table::unnamed();
+        backend.insert(table_id, table).await?;
+
+        let table_data = Values2D::new(
+            Index::new(2),
+            Index::new(1),
+            vec![
+                Box::new(1i32),
+                Box::new(2i32),
+            ],
+        )?;
+        backend.table_data.insert(table_id, table_data);
+
+        let row: Values = vec![Box::new(3i32), Box::new(4i32)];
+        backend
+            .add_row(table_id, 1, Index::new(0), row)
+            .await?;
+
+        let updated_data = backend.table_data.get(&table_id).unwrap();
+        assert_eq!(updated_data.rows(), Index::new(2));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_backend_add_column() -> Result<()> {
+        let mut backend = setup_backend();
+        let table_id = TableId::new(1);
+        let table_data = Values2D::new(
+            Index::new(2),
+            Index::new(2),
+            vec![
+                Box::new(1i32),
+                Box::new(2i32),
+                Box::new(3i32),
+                Box::new(4i32),
+            ],
+        )?;
+
+        let mut table = Table::unnamed();
+        table.shape.columns.add(None, 1)?;
+        table.shape.columns.add(None, 2)?;
+        table.shape.rows.add(None, 3)?;
+        table.shape.rows.add(None, 4)?;
+        backend.insert(table_id, table).await?;
+
+        backend.table_data.insert(table_id, table_data); // TODO: Direct access like this is not allowed.
+
+        let col: Values = vec![Box::new(5i32), Box::new(6i32)];
+        backend
+            .add_column(table_id, 5, Index::new(1), col)
+            .await?;
+
+        let updated_data = backend.table_data.get(&table_id).unwrap(); // TODO: Direct access like this is not allowed.
+        assert_eq!(updated_data.columns(), Index::new(3));
         Ok(())
     }
 }

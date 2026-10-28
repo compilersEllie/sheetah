@@ -4,7 +4,9 @@ use byteorder::{BigEndian, ByteOrder};
 use stable_hash::{StableHash, StableHasher, crypto::CryptoStableHasher, impl_stable_hash};
 use std::collections::HashMap;
 
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub struct TableName {
     pub name: Option<String>,
     pub clash: u32,
@@ -12,7 +14,9 @@ pub struct TableName {
 
 impl_stable_hash!(TableName { name, clash });
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub struct TableId {
     id: u128,
 }

@@ -84,7 +84,8 @@ impl Dimension {
     }
 
     pub fn add(&mut self, index: Option<usize>, id: FieldId) -> Result<()> {
-        if let Some(index) = index {
+        // TODO(bug): Check for duplicate fieldIds. #3
+        if let Some(index) = index && index < self.order.len() {
             self.order.insert(index, id);
         } else {
             self.order.push(id);
