@@ -1,4 +1,4 @@
-use crate::{table::TableId, workspace::Workspace};
+use crate::{shape::Shape, table::TableId, workspace::Workspace};
 use anyhow::Result;
 use stable_hash::impl_stable_hash;
 use std::{
@@ -100,7 +100,7 @@ pub struct Tab {
     pub panes: Vec<View>,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Pos {
     // TODO(mem): Check the num size is large enough and as small as possible. #4
     pub column: Index,
@@ -141,4 +141,5 @@ pub struct View {
 
     // For bulk operations.
     pub selected: Vec<Rect>, // TODO(perf): Smallvec #2
+    pub shape: Shape, // TODO(feat): A subset of the columns/etc. and a temporary sort order etc. #1
 }

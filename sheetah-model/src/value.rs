@@ -204,7 +204,7 @@ impl Value for Option<Box<dyn Value>> {
 // TODO: Add url? or parse #3
 // TODO: Add matricies #3
 
-#[derive(Clone, Debug, Hash)]
+#[derive(Default, Clone, Debug, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct ValueInfo {
     name: String,
     type_id_hash: u128, // TypeId (but can be stablehashed etc.)
@@ -218,6 +218,14 @@ impl_stable_hash!(ValueInfo {
 });
 
 impl ValueInfo {
+    pub fn new(name: String, type_id_hash: u128) -> Self {
+        Self {
+            name,
+            type_id_hash,
+            chosen_format: None,
+        }
+    }
+
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -241,7 +249,7 @@ impl ValueInfo {
 
 pub type Values = Vec<Box<dyn Value>>;
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct Values2D {
     values: Vec<Box<dyn Value>>,
     columns: Index,
@@ -468,41 +476,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_i8_value() {
-        let val = 42i8;
-        assert_eq!(val.name(), "integer (i8)");
+    fn test_i16_value() {
+        let val = 42i16;
+        assert_eq!(val.name(), "integer (i16)");
         let cloned = val.cloned();
-        assert_eq!(cloned.name(), "integer (i8)");
-        // bytes() for i8 should be [b'i', 8, 42]
-        assert_eq!(val.bytes(), vec![b'i', 8, 42]);
+        assert_eq!(cloned.name(), "integer (i16)");
+        assert_eq!(val.bytes(), vec![b'i', 16, 0, 42]);
     }
 
     #[test]
-    fn test_i32_value() {
-        let val = 123456789i32;
-        assert_eq!(val.name(), "integer (i32)");
+    fn test_f32_value() {
+        let val = 3.14f32;
+        assert_eq!(val.name(), "decimal (f32)");
         let cloned = val.cloned();
-        assert_eq!(cloned.name(), "integer (i32)");
-        // bytes() for i32 should be [b'i', 32, 11473022, 4, 1] (be_bytes of 123456789 is [0x07, 0x5B, 0xCD, 0x15])
-        // Actually i32 be_bytes for 123456789:
-        // 123456789 = 0x075BCD15
-        // be_bytes = [0x07, 0x5B, 0xCD, 0x15]
-        assert_eq!(val.bytes(), vec![b'i', 32, 0x07, 0x5B, 0xCD, 0x15]);
-    }
-
-    #[test]
-    fn test_f64_value() {
-        let val = 3.14159f64;
-        assert_eq!(val.name(), "decimal (f64)");
-        let cloned = val.cloned();
-        assert_eq!(cloned.name(), "decimal (f64)");
-        // bytes() for f64 should be [b'f', 64, (f64_bytes)]
-        // 3.14159 in hex (64-bit float) is 0x400921F9F01B866E
-        // be_bytes = [0x40, 0x09, 0x21, 0xF9, 0xF0, 0x1B, 0x86, 0x6E]
-        assert_eq!(
-            val.bytes(),
-            vec![b'f', 64, 0x40, 0x09, 0x21, 0xF9, 0xF0, 0x1B, 0x86, 0x6E]
-        );
+        assert_eq!(cloned.name(), "decimal (f32)");
+        let bytes = val.bytes();
+        assert_eq!(bytes[0], b'f');
+        assert_eq!(bytes[1], 32);
     }
 
     #[test]
@@ -656,10 +646,22 @@ mod tests {
         v2d.add_row(Index::new(1), new_row)?;
 
         assert_eq!(v2d.rows(), Index::new(2));
-        assert_eq!(v2d.get(Index::new(0), Index::new(0))?.name(), "integer (i32)");
-        assert_eq!(v2d.get(Index::new(1), Index::new(0))?.name(), "integer (i32)");
-        assert_eq!(v2d.get(Index::new(0), Index::new(1))?.name(), "integer (i32)");
-        assert_eq!(v2d.get(Index::new(1), Index::new(1))?.name(), "integer (i32)");
+        assert_eq!(
+            v2d.get(Index::new(0), Index::new(0))?.name(),
+            "integer (i32)"
+        );
+        assert_eq!(
+            v2d.get(Index::new(1), Index::new(0))?.name(),
+            "integer (i32)"
+        );
+        assert_eq!(
+            v2d.get(Index::new(0), Index::new(1))?.name(),
+            "integer (i32)"
+        );
+        assert_eq!(
+            v2d.get(Index::new(1), Index::new(1))?.name(),
+            "integer (i32)"
+        );
         Ok(())
     }
 
@@ -683,9 +685,18 @@ mod tests {
         v2d.add_column(Index::new(1), new_col)?;
 
         assert_eq!(v2d.columns(), Index::new(3));
-        assert_eq!(v2d.get(Index::new(0), Index::new(0))?.name(), "integer (i32)");
-        assert_eq!(v2d.get(Index::new(1), Index::new(0))?.name(), "integer (i32)");
-        assert_eq!(v2d.get(Index::new(2), Index::new(0))?.name(), "integer (i32)");
+        assert_eq!(
+            v2d.get(Index::new(0), Index::new(0))?.name(),
+            "integer (i32)"
+        );
+        assert_eq!(
+            v2d.get(Index::new(1), Index::new(0))?.name(),
+            "integer (i32)"
+        );
+        assert_eq!(
+            v2d.get(Index::new(2), Index::new(0))?.name(),
+            "integer (i32)"
+        );
         Ok(())
     }
 

@@ -1,4 +1,5 @@
 use crate::editor::{Index, Pos, View};
+use crate::shape::FieldId;
 use crate::table::{Table, TableId};
 use crate::value::{Values, Values2D, Values2DRef};
 use anyhow::Result;
@@ -8,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, serde::Serialize, serde::Deserialize)]
 pub struct BackendOptions {
     pub name: String,
     pub version: String,
@@ -43,11 +44,17 @@ pub trait Backend: Debug + Send + Sync {
         pos: &Pos,
         data: Values2D,
     ) -> Result<()>;
-    async fn add_row<'a>(&'a mut self, table: TableId, row_index: Index, row: Values)
-    -> Result<()>;
+    async fn add_row<'a>(
+        &'a mut self,
+        table: TableId,
+        field_id: FieldId,
+        row_index: Index,
+        row: Values,
+    ) -> Result<()>;
     async fn add_column<'a>(
         &'a mut self,
         table: TableId,
+        field_id: FieldId,
         column_index: Index,
         column_transposed: Values,
     ) -> Result<()>;

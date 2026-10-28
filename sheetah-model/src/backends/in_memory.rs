@@ -1,6 +1,7 @@
 use crate::backend::BackendOptions;
 use crate::backend::{Backend, BackendKind};
 use crate::editor::{Index, Pos, View};
+use crate::shape::FieldId;
 use crate::table::{Table, TableId};
 use crate::value::{Values, Values2D, Values2DRef};
 use anyhow::{Context, Result, bail};
@@ -17,6 +18,24 @@ pub struct InMemoryBackend {
     options: BackendOptions,
     tables: HashMap<TableId, Table>,
     table_data: HashMap<TableId, InMemoryTable>,
+}
+
+impl InMemoryBackend {
+    pub fn new(options: BackendOptions) -> Self {
+        Self {
+            options,
+            tables: HashMap::new(),
+            table_data: HashMap::new(),
+        }
+    }
+
+    async fn get_or_init_table_data(&mut self, table: TableId) -> Result<&mut InMemoryTable> {
+        if let std::collections::hash_map::Entry::Vacant(e) = self.table_data.entry(table) {
+            let empty_values = Values2D::new(Index::new(0), Index::new(0), vec![])?;
+            e.insert(empty_values);
+        }
+        Ok(self.table_data.get_mut(&table).unwrap())
+    }
 }
 
 inventory::submit!(BackendKind {
@@ -62,6 +81,7 @@ impl Backend for InMemoryBackend {
             text_start: _,
             text_length: _,
             selected: _,
+            shape: _, // TODO(feat): Handle shape #1
         } = view;
         let table_data = self
             .table_data
@@ -88,7 +108,7 @@ impl Backend for InMemoryBackend {
     ) -> Result<()> {
         let table_info = self.get(&table).await?;
 
-        if pos.column + data.columns() >= table_info.dims().column {
+        if pos.column + data.columns() > table_info.dims().column {
             bail!(
                 "New data at {} with dimensions {} has too many columns for table {:?} with dimensions {}",
                 pos,
@@ -98,7 +118,7 @@ impl Backend for InMemoryBackend {
             );
         }
 
-        if pos.row + data.rows() >= table_info.dims().row {
+        if pos.row + data.rows() > table_info.dims().row {
             bail!(
                 "New data at {} with dimensions {} has too many rows for table {:?} with dimensions {}",
                 pos,
@@ -127,29 +147,47 @@ impl Backend for InMemoryBackend {
     async fn add_row<'a>(
         &'a mut self,
         table: TableId,
+        field_id: FieldId,
         row_index: Index,
         row: Values,
     ) -> Result<()> {
-        let table_data = self
-            .table_data
-            .get_mut(&table)
-            .with_context(|| format!("Could not get table data for table {:?}", table))?;
+        let table_data = self.get_or_init_table_data(table).await?;
 
-        table_data.add_row(row_index, row)
+        table_data.add_row(row_index, row)?;
+
+        let table_info = self
+            .tables
+            .get_mut(&table)
+            .with_context(|| format!("Table {:?} not found", table))?;
+        table_info
+            .shape
+            .rows
+            .add(Some(row_index.raw() as usize), field_id)?;
+
+        Ok(())
     }
 
     async fn add_column<'a>(
         &'a mut self,
         table: TableId,
+        field_id: FieldId,
         column_index: Index,
         column: Values,
     ) -> Result<()> {
-        let table_data = self
-            .table_data
-            .get_mut(&table)
-            .with_context(|| format!("Could not get table data for table {:?}", table))?;
+        let table_data = self.get_or_init_table_data(table).await?;
 
-        table_data.add_column(column_index, column)
+        table_data.add_column(column_index, column)?;
+
+        let table_info = self
+            .tables
+            .get_mut(&table)
+            .with_context(|| format!("Table {:?} not found", table))?;
+        table_info
+            .shape
+            .columns
+            .add(Some(column_index.raw() as usize), field_id)?;
+
+        Ok(())
     }
 
     async fn insert(&mut self, table: TableId, table_info: Table) -> Result<()> {
@@ -164,12 +202,10 @@ impl Backend for InMemoryBackend {
         Ok(())
     }
 
-    /// Setup files for thee backend.
     async fn setup(&mut self) -> Result<()> {
         Ok(())
     }
 
-    /// Ensure all data is stored to the backend.
     async fn flush(&mut self) -> Result<()> {
         Ok(())
     }
