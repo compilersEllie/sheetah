@@ -338,6 +338,7 @@ impl Values2D {
             }
         }
         self.values = new_values;
+        self.columns = Index::new((cols + 1) as u32);
         Ok(())
     }
 
