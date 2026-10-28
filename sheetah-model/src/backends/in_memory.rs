@@ -135,7 +135,7 @@ impl Backend for InMemoryBackend {
             .get_mut(&table)
             .with_context(|| format!("Could not get table data for table {:?}", table))?;
 
-        table_data.add_row(row_index, row).await
+        table_data.add_row(row_index, row)
     }
 
     async fn add_column<'a>(
@@ -149,7 +149,7 @@ impl Backend for InMemoryBackend {
             .get_mut(&table)
             .with_context(|| format!("Could not get table data for table {:?}", table))?;
 
-        table_data.add_column(column_index, column).await
+        table_data.add_column(column_index, column)
     }
 
     async fn insert(&mut self, table: TableId, table_info: Table) -> Result<()> {
