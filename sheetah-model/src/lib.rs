@@ -24,3 +24,6 @@ pub mod value;
 #[cfg(test)]
 mod value_test;
 pub mod workspace;
+
+#[cfg(test)]
+mod xar_test;
