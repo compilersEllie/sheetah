@@ -4,6 +4,7 @@ use anyhow::{Result, bail};
 use stable_hash::{StableHash, StableHasher, impl_stable_hash};
 use std::any::{Any, TypeId};
 use std::fmt::Debug;
+use xar::Xar;
 
 #[typetag::serde(tag = "type")]
 pub trait Value: Debug + Sync + Send + 'static {
@@ -247,7 +248,125 @@ impl ValueInfo {
     }
 }
 
-pub type Values = Vec<Box<dyn Value>>;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Values {
+    data: Xar<ValueStorage>,
+    shape: Vec<Index>,
+    strides: Vec<usize>,
+}
+
+impl Values {
+    pub fn new(shape: Vec<Index>, data: Vec<ValueStorage>) -> Result<Self> {
+        let len = shape.iter().map(|i| i.raw() as usize).product();
+        if len != data.len() {
+            bail!("Dimension mismatch: shape product {} != data length {}", len, data.len());
+        }
+
+        let mut strides = vec![1; shape.len()];
+        for i in (0..shape.len() - 1).rev() {
+            strides[i] = strides[i + 1] * shape[i + 1].raw() as usize;
+        }
+
+        Ok(Self {
+            data: Xar::new(data),
+            shape,
+            strides,
+        })
+    }
+
+    pub fn get(&self, indices: &[Index]) -> Result<&ValueStorage> {
+        let mut offset = 0;
+        for (i, &idx) in indices.iter().enumerate() {
+            if i >= self.shape.len() || idx.raw() >= self.shape[i].raw() {
+                bail!("Index out of bounds");
+            }
+            offset += idx.raw() as usize * self.strides[i];
+        }
+        Ok(&self.data.get(offset))
+    }
+
+    pub fn set(&mut self, indices: &[Index], value: ValueStorage) -> Result<()> {
+        let mut offset = 0;
+        for (i, &idx) in indices.iter().enumerate() {
+            if i >= self.shape.len() || idx.raw() >= self.shape[i].raw() {
+                bail!("Index out of bounds");
+            }
+            offset += idx.raw() as usize * self.strides[i];
+        }
+        self.data.set(offset, value);
+        Ok(())
+    }
+
+    pub fn shape(&self) -> &[Index] {
+        &self.shape
+    }
+
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+}
+
+pub type ValueVec = Vec<Box<dyn Value>>;
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+pub struct Values {
+    data: Xar<ValueStorage>,
+    shape: Vec<Index>,
+    strides: Vec<usize>,
+}
+
+impl Values {
+    pub fn new(shape: Vec<Index>, data: Vec<ValueStorage>) -> Result<Self> {
+        let len = shape.iter().map(|i| i.raw() as usize).product();
+        if len != data.len() {
+            bail!("Dimension mismatch: shape product {} != data length {}", len, data.len());
+        }
+
+        let mut strides = vec![1; shape.len()];
+        for i in (0..shape.len() - 1).rev() {
+            strides[i] = strides[i + 1] * shape[i + 1].raw() as usize;
+        }
+
+        Ok(Self {
+            data: Xar::new(data),
+            shape,
+            strides,
+        })
+    }
+
+    pub fn get(&self, indices: &[Index]) -> Result<&ValueStorage> {
+        let mut offset = 0;
+        for (i, &idx) in indices.iter().enumerate() {
+            if i >= self.shape.len() || idx.raw() >= self.shape[i].raw() {
+                bail!("Index out of bounds");
+            }
+            offset += idx.raw() as usize * self.strides[i];
+        }
+        Ok(&self.data.get(offset))
+    }
+
+    pub fn set(&mut self, indices: &[Index], value: ValueStorage) -> Result<()> {
+        let mut offset = 0;
+        for (i, &idx) in indices.iter().enumerate() {
+            if i >= self.shape.len() || idx.raw() >= self.shape[i].raw() {
+                bail!("Index out of bounds");
+            }
+            offset += idx.raw() as usize * self.strides[i];
+        }
+        self.data.set(offset, value);
+        Ok(())
+    }
+
+    pub fn shape(&self) -> &[Index] {
+        &self.shape
+    }
+
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+}
+
+pub type ValueVec = Vec<Box<dyn Value>>;
 
 #[derive(Default, Debug)]
 pub struct Values2D {
