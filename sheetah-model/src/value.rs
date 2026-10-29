@@ -1,6 +1,8 @@
 use crate::editor::{Index, Pos};
 use crate::optic::OpticId;
 use anyhow::{Result, bail};
+use serde::{Deserialize, Serialize};
+use smol_str::SmolStr;
 use stable_hash::{StableHash, StableHasher, impl_stable_hash};
 use std::any::{Any, TypeId};
 use std::fmt::Debug;
@@ -37,16 +39,89 @@ impl StableHash for &dyn Value {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub enum ValueStorage {
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    I128(i128),
+    F32(f32),
+    F64(f64),
+    Str(SmolStr),
+    Other(Box<dyn Value>),
+}
+
+impl Clone for ValueStorage {
+    fn clone(&self) -> Self {
+        match self {
+            Self::I8(v) => Self::I8(*v),
+            Self::I16(v) => Self::I16(*v),
+            Self::I32(v) => Self::I32(*v),
+            Self::I64(v) => Self::I64(*v),
+            Self::I128(v) => Self::I128(*v),
+            Self::F32(v) => Self::F32(*v),
+            Self::F64(v) => Self::F64(*v),
+            Self::Str(v) => Self::Str(v.clone()),
+            Self::Other(v) => Self::Other(v.cloned()),
+        }
+    }
+}
+
+#[typetag::serde]
+impl Value for ValueStorage {
+    fn name(&self) -> String {
+        // TODO(perf): Use small strings for all of these.
+        match self {
+            Self::I8(v) => v.name(),
+            Self::I16(v) => v.name(),
+            Self::I32(v) => v.name(),
+            Self::I64(v) => v.name(),
+            Self::I128(v) => v.name(),
+            Self::F32(v) => v.name(),
+            Self::F64(v) => v.name(),
+            Self::Str(_) => "text".to_string(),
+            Self::Other(v) => v.name(),
+        }
+    }
+
+    fn cloned(&self) -> Box<dyn Value> {
+        match self {
+            Self::I8(v) => Box::new(*v),
+            Self::I16(v) => Box::new(*v),
+            Self::I32(v) => Box::new(*v),
+            Self::I64(v) => Box::new(*v),
+            Self::I128(v) => Box::new(*v),
+            Self::F32(v) => Box::new(*v),
+            Self::F64(v) => Box::new(*v),
+            Self::Str(v) => Box::new(v.to_string()),
+            Self::Other(v) => v.cloned(),
+        }
+    }
+
+    fn bytes(&self) -> Vec<u8> {
+        match self {
+            Self::I8(v) => v.bytes(),
+            Self::I16(v) => v.bytes(),
+            Self::I32(v) => v.bytes(),
+            Self::I64(v) => v.bytes(),
+            Self::I128(v) => v.bytes(),
+            Self::F32(v) => v.bytes(),
+            Self::F64(v) => v.bytes(),
+            Self::Str(v) => v.as_bytes().to_vec(),
+            Self::Other(v) => v.bytes(),
+        }
+    }
+}
+
 #[typetag::serde]
 impl Value for i8 {
     fn name(&self) -> String {
         "integer (i8)".to_string()
     }
-
     fn cloned(&self) -> Box<dyn Value> {
         Box::new(*self)
     }
-
     fn bytes(&self) -> Vec<u8> {
         [b'i', 8].into_iter().chain(self.to_be_bytes()).collect()
     }
@@ -57,11 +132,9 @@ impl Value for i16 {
     fn name(&self) -> String {
         "integer (i16)".to_string()
     }
-
     fn cloned(&self) -> Box<dyn Value> {
         Box::new(*self)
     }
-
     fn bytes(&self) -> Vec<u8> {
         [b'i', 16].into_iter().chain(self.to_be_bytes()).collect()
     }
@@ -72,11 +145,9 @@ impl Value for i32 {
     fn name(&self) -> String {
         "integer (i32)".to_string()
     }
-
     fn cloned(&self) -> Box<dyn Value> {
         Box::new(*self)
     }
-
     fn bytes(&self) -> Vec<u8> {
         [b'i', 32].into_iter().chain(self.to_be_bytes()).collect()
     }
@@ -87,11 +158,9 @@ impl Value for i64 {
     fn name(&self) -> String {
         "integer (i64)".to_string()
     }
-
     fn cloned(&self) -> Box<dyn Value> {
         Box::new(*self)
     }
-
     fn bytes(&self) -> Vec<u8> {
         [b'i', 64].into_iter().chain(self.to_be_bytes()).collect()
     }
@@ -102,11 +171,9 @@ impl Value for i128 {
     fn name(&self) -> String {
         "integer (i128)".to_string()
     }
-
     fn cloned(&self) -> Box<dyn Value> {
         Box::new(*self)
     }
-
     fn bytes(&self) -> Vec<u8> {
         [b'i', 128].into_iter().chain(self.to_be_bytes()).collect()
     }
@@ -115,13 +182,11 @@ impl Value for i128 {
 #[typetag::serde]
 impl Value for f32 {
     fn name(&self) -> String {
-        "decimal (f32)".to_string()
+        "float (f32)".to_string()
     }
-
     fn cloned(&self) -> Box<dyn Value> {
         Box::new(*self)
     }
-
     fn bytes(&self) -> Vec<u8> {
         [b'f', 32].into_iter().chain(self.to_be_bytes()).collect()
     }
@@ -132,11 +197,9 @@ impl Value for f64 {
     fn name(&self) -> String {
         "decimal (f64)".to_string()
     }
-
     fn cloned(&self) -> Box<dyn Value> {
         Box::new(*self)
     }
-
     fn bytes(&self) -> Vec<u8> {
         [b'f', 64].into_iter().chain(self.to_be_bytes()).collect()
     }
@@ -147,16 +210,13 @@ impl Value for String {
     fn name(&self) -> String {
         "text".to_string()
     }
-
     fn cloned(&self) -> Box<dyn Value> {
         Box::new(self.clone())
     }
-
     fn bytes(&self) -> Vec<u8> {
-        b"s".iter()
-            .chain(&self.len().to_be_bytes())
-            .chain(self.as_bytes())
-            .cloned()
+        (*b"s")
+            .into_iter()
+            .chain(self.as_bytes().iter().cloned())
             .collect()
     }
 }
@@ -164,13 +224,11 @@ impl Value for String {
 #[typetag::serde]
 impl Value for Box<dyn Value> {
     fn name(&self) -> String {
-        (&**self as &dyn Value).name()
+        (**self).name()
     }
-
     fn cloned(&self) -> Box<dyn Value> {
-        Box::new((&**self as &dyn Value).cloned())
+        (**self).cloned()
     }
-
     fn bytes(&self) -> Vec<u8> {
         (**self).bytes()
     }
@@ -181,18 +239,19 @@ impl Value for Option<Box<dyn Value>> {
     fn name(&self) -> String {
         match self {
             Some(v) => format!("some {}", v.name()),
-            None => "none".to_string(),
+            None => "none".into(),
         }
     }
-
     fn cloned(&self) -> Box<dyn Value> {
-        Box::new((self as &dyn Value).cloned())
+        match self {
+            Some(v) => v.cloned(),
+            None => todo!(),
+        }
     }
-
     fn bytes(&self) -> Vec<u8> {
         match self {
-            Some(v) => b"a".iter().chain(&v.bytes()).cloned().collect(),
-            None => b"n".to_vec(),
+            Some(v) => v.bytes(),
+            None => vec![],
         }
     }
 }
@@ -370,8 +429,8 @@ pub type ValueVec = Vec<Box<dyn Value>>;
 
 #[derive(Default, Debug)]
 pub struct Values2D {
-    values: Vec<Box<dyn Value>>,
-    columns: Index,
+    pub values: Vec<Box<dyn Value>>,
+    pub columns: Index,
 }
 
 impl Values2D {
