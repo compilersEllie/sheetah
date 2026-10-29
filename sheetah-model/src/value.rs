@@ -69,6 +69,7 @@ impl Clone for ValueStorage {
 #[typetag::serde]
 impl Value for ValueStorage {
     fn name(&self) -> String {
+        // TODO(perf): Use small strings for all of these.
         match self {
             Self::None => "none".to_string(),
             Self::I8(v) => v.name(),
@@ -151,7 +152,7 @@ impl Value for i128 {
 
 #[typetag::serde]
 impl Value for f32 {
-    fn name(&self) -> String { "float (f32)".to_string() }
+    fn name(&self) -> String { "decimal (f32)".to_string() }
     fn cloned(&self) -> Box<dyn Value> { Box::new(*self) }
     fn bytes(&self) -> Vec<u8> { [b'f', 32].into_iter().chain(self.to_be_bytes()).collect() }
 }
