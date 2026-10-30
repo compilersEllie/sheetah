@@ -14,17 +14,10 @@ jobs:
   rust:
     name: rust CI ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    outputs:
-      rust_stable: ${{ steps.toolchains.outputs.rust_stable }}
-      rust_nightly: ${{ steps.toolchains.outputs.rust_nightly }}
     strategy:
       matrix:
         os: [ubuntu-latest] #, windows-latest]
     steps:
-    - id: toolchains
-      run: |
-        echo "rust_stable=1.94.0" >> "$GITHUB_OUTPUT"
-        echo "rust_nightly=nightly-2026-05-01" >> "$GITHUB_OUTPUT"
     - name: Refresh apt package lists
       run: sudo apt-get update
     - uses: awalsh128/cache-apt-pkgs-action@latest
@@ -33,7 +26,7 @@ jobs:
         version: 1.2
     - uses: dtolnay/rust-toolchain@master
       with:
-        toolchain: ${{ needs.rust.outputs.rust_stable }}
+        toolchain: 1.94.0
         components: rustfmt, clippy
     - name: Run sccache-cache
       uses: mozilla-actions/sccache-action@v0.0.11
