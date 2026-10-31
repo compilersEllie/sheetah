@@ -2,10 +2,12 @@ use crate::editor::{Index, Pos};
 use crate::error::{Result, SheetahError};
 use crate::optic::OpticId;
 use serde::{Deserialize, Serialize};
+use smallvec::SmallVec;
 use smol_str::SmolStr;
-use stable_hash::{StableHash, StableHasher, impl_stable_hash};
+use stable_hash::{impl_stable_hash, StableHash, StableHasher};
 use std::any::{Any, TypeId};
 use std::fmt::Debug;
+use xar::Xar;
 
 #[typetag::serde(tag = "type")]
 pub trait Value: Debug + Sync + Send + 'static {

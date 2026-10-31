@@ -3,7 +3,7 @@ use crate::{shape::Shape, table::TableId, workspace::Workspace};
 use stable_hash::impl_stable_hash;
 use std::{
     fmt::Display,
-    ops::{Add, Mul, AddAssign},
+    ops::{Add, AddAssign, Mul},
     path::PathBuf,
 };
 
