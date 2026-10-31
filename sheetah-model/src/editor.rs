@@ -3,7 +3,7 @@ use anyhow::Result;
 use stable_hash::impl_stable_hash;
 use std::{
     fmt::Display,
-    ops::{Add, Mul},
+    ops::{Add, Mul, AddAssign},
     path::PathBuf,
 };
 
@@ -48,6 +48,20 @@ where
     #[inline]
     fn mul(self, other: T) -> Self::Output {
         (other * self.id).into()
+    }
+}
+
+impl AddAssign<u32> for Index {
+    #[inline]
+    fn add_assign(&mut self, other: u32) {
+        self.id += other;
+    }
+}
+
+impl AddAssign<Index> for Index {
+    #[inline]
+    fn add_assign(&mut self, other: Index) {
+        self.id += other.id;
     }
 }
 
