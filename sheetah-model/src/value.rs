@@ -6,6 +6,8 @@ use smol_str::SmolStr;
 use stable_hash::{StableHash, StableHasher, impl_stable_hash};
 use std::any::{Any, TypeId};
 use std::fmt::Debug;
+use xar_array::Xar;
+use smallvec::SmallVec;
 
 #[typetag::serde(tag = "type")]
 pub trait Value: Debug + Sync + Send + 'static {
@@ -13,15 +15,11 @@ pub trait Value: Debug + Sync + Send + 'static {
     // TODO(feat): Use garde for validstion #3
     // https://docs.rs/garde/latest/garde/#basic-usage-example
     fn name(&self) -> String;
-
     fn cloned(&self) -> Box<dyn Value>;
-
     fn bytes(&self) -> Vec<u8>;
-
     fn type_id(&self) -> TypeId {
         Any::type_id(self)
     }
-
     fn make_info(&self) -> ValueInfo {
         ValueInfo {
             name: self.name(),
@@ -38,8 +36,10 @@ impl StableHash for &dyn Value {
     }
 }
 
+#[repr(align(32))]
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ValueStorage {
+    None,
     I8(i8),
     I16(i16),
     I32(i32),
@@ -54,6 +54,7 @@ pub enum ValueStorage {
 impl Clone for ValueStorage {
     fn clone(&self) -> Self {
         match self {
+            Self::None => Self::None,
             Self::I8(v) => Self::I8(*v),
             Self::I16(v) => Self::I16(*v),
             Self::I32(v) => Self::I32(*v),
@@ -70,8 +71,8 @@ impl Clone for ValueStorage {
 #[typetag::serde]
 impl Value for ValueStorage {
     fn name(&self) -> String {
-        // TODO(perf): Use small strings for all of these.
         match self {
+            Self::None => "none".to_string(),
             Self::I8(v) => v.name(),
             Self::I16(v) => v.name(),
             Self::I32(v) => v.name(),
@@ -86,6 +87,7 @@ impl Value for ValueStorage {
 
     fn cloned(&self) -> Box<dyn Value> {
         match self {
+            Self::None => Box::new(0i8),
             Self::I8(v) => Box::new(*v),
             Self::I16(v) => Box::new(*v),
             Self::I32(v) => Box::new(*v),
@@ -100,6 +102,7 @@ impl Value for ValueStorage {
 
     fn bytes(&self) -> Vec<u8> {
         match self {
+            Self::None => vec![],
             Self::I8(v) => v.bytes(),
             Self::I16(v) => v.bytes(),
             Self::I32(v) => v.bytes(),

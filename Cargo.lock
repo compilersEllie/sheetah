@@ -5401,6 +5401,7 @@ dependencies = [
  "postcard",
  "serde",
  "serde_json",
+ "smallvec",
  "smol_str",
  "stable-hash",
  "tokio",
