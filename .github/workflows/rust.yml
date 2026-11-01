@@ -4,6 +4,7 @@ on: [push]
 
 env:
   CARGO_TERM_COLOR: always
+  RUSTC_WRAPPER: sccache
 
 jobs:
   rust:
@@ -15,18 +16,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
-    - name: Run sccache-cache
+    - name: Install sccache
       uses: mozilla-actions/sccache-action@v0.0.11
-    - uses: actions/cache@v5
-      with:
-        path: |
-          /home/runner/.cargo/
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          ${{ runner.os }}-cargo-
-          ${{ runner.os }}-
+
+    - uses: swatinem/rust-cache@v2
+
     - name: Install system packages
       run: |
         sudo apt update && \
@@ -37,28 +31,6 @@ jobs:
           libsoup-3.0-dev \
           libwebkit2gtk-4.1-dev
 
-    - name: Run tests (dev)
-      if: github.event.pull_request.merged == false
-      run: cargo test --locked --verbose
-    - name: Run ignored tests (dev)
-      continue-on-error: true
-      if: github.event.pull_request.merged == false
-      run: cargo test --locked --verbose -- --ignored
-
-    - name: Run tests (release)
-      if: github.event.pull_request.merged == true
-      run: cargo test --locked --release --verbose
-    - name: Run ignored tests (release)
-      if: github.event.pull_request.merged == true
-      run: cargo test --locked --release --verbose -- --ignored
-
-    - name: Build (dev)
-      if: github.event.pull_request.merged == false
-      run: cargo build --locked --verbose
-    - name: Build (release)
-      if: github.event.pull_request.merged == true
-      run: cargo build --locked --release --verbose
-
     - name: Install clippy
       run: rustup component add clippy
     - name: Clippy
@@ -67,6 +39,26 @@ jobs:
       run: rustup component add rustfmt
     - name: Format
       run: cargo fmt --all -- --check
+
+    - name: Run tests (dev)
+      if: github.event.pull_request.merged == false
+      run: |
+        cargo test --locked --verbose
+        cargo test --locked --verbose -- --ignored
+
+    - name: Run tests (release)
+      if: github.event.pull_request.merged == true
+      run: |
+        cargo test --locked --release --verbose
+        cargo test --locked --release --verbose -- --ignored
+
+    - name: Build (dev)
+      if: github.event.pull_request.merged == false
+      run: cargo build --locked --verbose
+
+    - name: Build (release)
+      if: github.event.pull_request.merged == true
+      run: cargo build --locked --release --verbose
 
     - name: Upload executable Linux
       if: github.ref == 'refs/heads/master' && runner.os == 'Linux'
