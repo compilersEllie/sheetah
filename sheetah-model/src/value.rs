@@ -2,7 +2,6 @@ use crate::editor::{Index, Pos};
 use crate::error::{Result, SheetahError};
 use crate::optic::OpticId;
 use serde::{Deserialize, Serialize};
-use smallvec::SmallVec;
 use smol_str::SmolStr;
 use stable_hash::{impl_stable_hash, StableHash, StableHasher};
 use std::any::{Any, TypeId};
