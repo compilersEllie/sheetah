@@ -3,7 +3,7 @@ use crate::editor::{Index, Pos, View};
 use crate::error::{Result, SheetahError};
 use crate::shape::FieldId;
 use crate::table::{Table, TableId};
-use crate::value::{Value, ValueStorage, Values, Values2D, Values2DRef};
+use crate::value::{Value, Values, Values2D, Values2DRef, ValueVec, ValueStorage};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -64,7 +64,7 @@ impl Backend for InMemoryBackend {
         Ok(table_info)
     }
 
-    async fn get_data(&self, view: &View) -> Result<Values2DRef> {
+    async fn get_data<'a>(&'a self, view: &View) -> Result<Values2DRef<'a>> {
         let View {
             table,
             cursor: _,
@@ -83,7 +83,7 @@ impl Backend for InMemoryBackend {
         let start_col = window.start.column.raw();
         for row in start_row..start_row + window.rows.raw() {
             for col in start_col..start_col + window.columns.raw() {
-                values.push(table_data.get(Index::new(col), Index::new(row))?);
+                values.push(&table_data.get(Index::new(col), Index::new(row))?);
             }
         }
         Ok(Values2DRef::new(window.columns, window.rows, values)?)
@@ -120,7 +120,7 @@ impl Backend for InMemoryBackend {
             table_data.set(
                 pos.column + cursor.column,
                 pos.row + cursor.row,
-                data.get(cursor.column, cursor.row)?.cloned(),
+                data.get(cursor.column, cursor.row)?.clone(),
             )?;
         }
         Ok(())
@@ -137,7 +137,7 @@ impl Backend for InMemoryBackend {
             SheetahError::BackendError(format!("Could not get table data for table {:?}", table))
         })?;
 
-        table_data.add_row(row_index, row)?;
+        table_data.add_row(row_index, row.into_vec())?;
 
         let table_info = self
             .tables
@@ -162,7 +162,7 @@ impl Backend for InMemoryBackend {
             SheetahError::BackendError(format!("Could not get table data for table {:?}", table))
         })?;
 
-        table_data.add_column(column_index, column)?;
+        table_data.add_column(column_index, column.into_vec())?;
 
         let table_info = self
             .tables
@@ -185,7 +185,7 @@ impl Backend for InMemoryBackend {
         let num_elements = (dims.column.raw() * dims.row.raw()) as usize;
         let mut values: Vec<ValueStorage> = Vec::with_capacity(num_elements);
         for _ in 0..num_elements {
-            values.push(ValueStorage::Other(Box::new(0i32)));
+            values.push(ValueStorage::I32(0));
         }
         let table_data = Values2D::new(dims.column, dims.row, Values::new(table_info.shape, values))?;
 

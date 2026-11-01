@@ -8,7 +8,7 @@ use std::{
 };
 
 // Small index type for realworld use.
-#[derive(Debug, Default, Copy, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Debug, Default, Copy, Clone, Hash, Ord, PartialOrd, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Index {
     id: u32,
 }
@@ -114,7 +114,7 @@ pub struct Tab {
     pub panes: Vec<View>,
 }
 
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash, serde::Serialize, serde::Deserialize)]
 pub struct Pos {
     // TODO(mem): Check the num size is large enough and as small as possible. #4
     pub column: Index,
@@ -127,7 +127,7 @@ impl Display for Pos {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct Rect {
     pub start: Pos,
     pub columns: Index,
