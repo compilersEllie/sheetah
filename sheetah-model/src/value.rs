@@ -6,7 +6,6 @@ use smol_str::SmolStr;
 use stable_hash::{StableHash, StableHasher, impl_stable_hash};
 use std::any::{Any, TypeId};
 use std::fmt::Debug;
-use xar::Xar;
 
 #[typetag::serde(tag = "type")]
 pub trait Value: Debug + Sync + Send + 'static {
@@ -36,7 +35,7 @@ impl StableHash for &dyn Value {
 }
 
 #[repr(align(32))]
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum ValueStorage {
     None,
     I8(i8),
@@ -117,122 +116,65 @@ impl Value for ValueStorage {
 
 #[typetag::serde]
 impl Value for i8 {
-    fn name(&self) -> String {
-        "integer (i8)".to_string()
-    }
-    fn cloned(&self) -> Box<dyn Value> {
-        Box::new(*self)
-    }
-    fn bytes(&self) -> Vec<u8> {
-        [b'i', 8].into_iter().chain(self.to_be_bytes()).collect()
-    }
+    fn name(&self) -> String { "integer (i8)".to_string() }
+    fn cloned(&self) -> Box<dyn Value> { Box::new(*self) }
+    fn bytes(&self) -> Vec<u8> { [b'i', 8].into_iter().chain(self.to_be_bytes()).collect() }
 }
 
 #[typetag::serde]
 impl Value for i16 {
-    fn name(&self) -> String {
-        "integer (i16)".to_string()
-    }
-    fn cloned(&self) -> Box<dyn Value> {
-        Box::new(*self)
-    }
-    fn bytes(&self) -> Vec<u8> {
-        [b'i', 16].into_iter().chain(self.to_be_bytes()).collect()
-    }
+    fn name(&self) -> String { "integer (i16)".to_string() }
+    fn cloned(&self) -> Box<dyn Value> { Box::new(*self) }
+    fn bytes(&self) -> Vec<u8> { [b'i', 16].into_iter().chain(self.to_be_bytes()).collect() }
 }
 
 #[typetag::serde]
 impl Value for i32 {
-    fn name(&self) -> String {
-        "integer (i32)".to_string()
-    }
-    fn cloned(&self) -> Box<dyn Value> {
-        Box::new(*self)
-    }
-    fn bytes(&self) -> Vec<u8> {
-        [b'i', 32].into_iter().chain(self.to_be_bytes()).collect()
-    }
+    fn name(&self) -> String { "integer (i32)".to_string() }
+    fn cloned(&self) -> Box<dyn Value> { Box::new(*self) }
+    fn bytes(&self) -> Vec<u8> { [b'i', 32].into_iter().chain(self.to_be_bytes()).collect() }
 }
 
 #[typetag::serde]
 impl Value for i64 {
-    fn name(&self) -> String {
-        "integer (i64)".to_string()
-    }
-    fn cloned(&self) -> Box<dyn Value> {
-        Box::new(*self)
-    }
-    fn bytes(&self) -> Vec<u8> {
-        [b'i', 64].into_iter().chain(self.to_be_bytes()).collect()
-    }
+    fn name(&self) -> String { "integer (i64)".to_string() }
+    fn cloned(&self) -> Box<dyn Value> { Box::new(*self) }
+    fn bytes(&self) -> Vec<u8> { [b'i', 64].into_iter().chain(self.to_be_bytes()).collect() }
 }
 
 #[typetag::serde]
 impl Value for i128 {
-    fn name(&self) -> String {
-        "integer (i128)".to_string()
-    }
-    fn cloned(&self) -> Box<dyn Value> {
-        Box::new(*self)
-    }
-    fn bytes(&self) -> Vec<u8> {
-        [b'i', 128].into_iter().chain(self.to_be_bytes()).collect()
-    }
+    fn name(&self) -> String { "integer (i128)".to_string() }
+    fn cloned(&self) -> Box<dyn Value> { Box::new(*self) }
+    fn bytes(&self) -> Vec<u8> { [b'i', 128].into_iter().chain(self.to_be_bytes()).collect() }
 }
 
 #[typetag::serde]
 impl Value for f32 {
-    fn name(&self) -> String {
-        "float (f32)".to_string()
-    }
-    fn cloned(&self) -> Box<dyn Value> {
-        Box::new(*self)
-    }
-    fn bytes(&self) -> Vec<u8> {
-        [b'f', 32].into_iter().chain(self.to_be_bytes()).collect()
-    }
+    fn name(&self) -> String { "float (f32)".to_string() }
+    fn cloned(&self) -> Box<dyn Value> { Box::new(*self) }
+    fn bytes(&self) -> Vec<u8> { [b'f', 32].into_iter().chain(self.to_be_bytes()).collect() }
 }
 
 #[typetag::serde]
 impl Value for f64 {
-    fn name(&self) -> String {
-        "decimal (f64)".to_string()
-    }
-    fn cloned(&self) -> Box<dyn Value> {
-        Box::new(*self)
-    }
-    fn bytes(&self) -> Vec<u8> {
-        [b'f', 64].into_iter().chain(self.to_be_bytes()).collect()
-    }
+    fn name(&self) -> String { "decimal (f64)".to_string() }
+    fn cloned(&self) -> Box<dyn Value> { Box::new(*self) }
+    fn bytes(&self) -> Vec<u8> { [b'f', 64].into_iter().chain(self.to_be_bytes()).collect() }
 }
 
 #[typetag::serde]
 impl Value for String {
-    fn name(&self) -> String {
-        "text".to_string()
-    }
-    fn cloned(&self) -> Box<dyn Value> {
-        Box::new(self.clone())
-    }
-    fn bytes(&self) -> Vec<u8> {
-        (*b"s")
-            .into_iter()
-            .chain(self.as_bytes().iter().cloned())
-            .collect()
-    }
+    fn name(&self) -> String { "text".to_string() }
+    fn cloned(&self) -> Box<dyn Value> { Box::new(self.clone()) }
+    fn bytes(&self) -> Vec<u8> { [b's'].into_iter().chain(self.as_bytes().iter().cloned()).collect() }
 }
 
 #[typetag::serde]
 impl Value for Box<dyn Value> {
-    fn name(&self) -> String {
-        (**self).name()
-    }
-    fn cloned(&self) -> Box<dyn Value> {
-        (**self).cloned()
-    }
-    fn bytes(&self) -> Vec<u8> {
-        (**self).bytes()
-    }
+    fn name(&self) -> String { (**self).name() }
+    fn cloned(&self) -> Box<dyn Value> { (**self).cloned() }
+    fn bytes(&self) -> Vec<u8> { (**self).bytes() }
 }
 
 #[typetag::serde]
@@ -308,7 +250,7 @@ impl ValueInfo {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Values {
     data: Xar<ValueStorage>,
     shape: Vec<Index>,
@@ -317,18 +259,18 @@ pub struct Values {
 
 impl Values {
     pub fn new(shape: Vec<Index>, data: Vec<ValueStorage>) -> Result<Self> {
-        let len = shape.iter().map(|i| i.raw() as usize).product();
+        let len: usize = shape.iter().map(|i| i.raw() as usize).product();
         if len != data.len() {
             bail!("Dimension mismatch: shape product {} != data length {}", len, data.len());
         }
 
         let mut strides = vec![1; shape.len()];
-        for i in (0..shape.len() - 1).rev() {
+        for i in (0..shape.len().saturating_sub(1)).rev() {
             strides[i] = strides[i + 1] * shape[i + 1].raw() as usize;
         }
 
         Ok(Self {
-            data: Xar::new(data),
+            data,
             shape,
             strides,
         })
@@ -364,9 +306,11 @@ impl Values {
     pub fn len(&self) -> usize {
         self.data.len()
     }
-}
 
-pub type ValueVec = Vec<Box<dyn Value>>;
+    pub fn into_vec(self) -> Vec<ValueStorage> {
+        self.data
+    }
+}
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct Values2D {
@@ -388,13 +332,19 @@ impl Values2D {
     }
 
     #[inline]
-    pub fn get(&self, column: Index, row: Index) -> Result<&dyn Value> {
+    pub fn get(&self, column: Index, row: Index) -> Result<ValueStorage> {
+        let ind = self.index(column, row)?.raw() as usize;
+        Ok(self.values[ind].clone())
+    }
+
+    #[inline]
+    pub fn get_ref(&self, column: Index, row: Index) -> Result<&ValueStorage> {
         let ind = self.index(column, row)?.raw() as usize;
         Ok(&self.values[ind])
     }
 
     #[inline]
-    pub fn set(&mut self, column: Index, row: Index, value: Box<dyn Value>) -> Result<()> {
+    pub fn set(&mut self, column: Index, row: Index, value: ValueStorage) -> Result<()> {
         let ind = self.index(column, row)?.raw() as usize;
         self.values[ind] = value;
         Ok(())
@@ -523,12 +473,12 @@ impl Values2D {
 }
 
 pub struct Values2DRef<'a> {
-    values: Vec<&'a dyn Value>,
+    values: Vec<&'a ValueStorage>,
     columns: Index,
 }
 
 impl<'a> Values2DRef<'a> {
-    pub fn new(columns: Index, rows: Index, values: Vec<&'a dyn Value>) -> Result<Self> {
+    pub fn new(columns: Index, rows: Index, values: Vec<&'a ValueStorage>) -> Result<Self> {
         if (columns * rows) as usize != values.len() {
             bail!(
                 "Dimensions of values do not match: {} x {} != {}",
@@ -541,7 +491,7 @@ impl<'a> Values2DRef<'a> {
     }
 
     #[inline]
-    pub fn get(&self, column: Index, row: Index) -> &dyn Value {
+    pub fn get(&self, column: Index, row: Index) -> &ValueStorage {
         let ind = self.index(column, row).raw() as usize;
         self.values[ind]
     }
