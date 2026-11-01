@@ -7,7 +7,7 @@ use stable_hash::{FieldAddress, StableHash, StableHasher, impl_stable_hash};
 
 pub type FieldId = u32;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum SortOrder {
     Ascending,
     Descending,
@@ -25,7 +25,7 @@ impl StableHash for SortOrder {
     }
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Shape {
     fields: Vec<FieldInfo>,
     pub columns: Dimension,
@@ -39,6 +39,11 @@ impl_stable_hash!(Shape {
 });
 
 impl Shape {
+    #[inline]
+    pub fn fields(&self) -> &[FieldInfo] {
+        &self.fields
+    }
+
     #[inline]
     pub fn dims(&self) -> Pos {
         Pos {
@@ -54,7 +59,7 @@ impl Shape {
     // TODO(feat): Calculate the remainder, fields and their types, after taking out columns and rows, for each cell. #2
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Dimension {
     order: Vec<FieldId>,
     sort: Vec<(FieldId, SortOrder)>,
@@ -63,6 +68,11 @@ pub struct Dimension {
 impl_stable_hash!(Dimension { order, sort });
 
 impl Dimension {
+    #[inline]
+    pub fn sort(&self) -> &[(FieldId, SortOrder)] {
+        &self.sort
+    }
+
     #[inline]
     pub fn len(&self) -> Index {
         (self.order.len() as u32).into()
@@ -74,7 +84,10 @@ impl Dimension {
     }
 
     pub fn add(&mut self, index: Option<usize>, id: FieldId) -> Result<()> {
-        if let Some(index) = index {
+        // TODO(bug): Check for duplicate fieldIds. #3
+        if let Some(index) = index
+            && index < self.order.len()
+        {
             self.order.insert(index, id);
         } else {
             self.order.push(id);
@@ -93,7 +106,7 @@ impl Dimension {
     }
 }
 
-#[derive(Clone, Debug, Hash)]
+#[derive(Clone, Debug, Hash, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct FieldInfo {
     id: FieldId, // Unique ID per table.
     name: Option<String>,
@@ -103,6 +116,10 @@ pub struct FieldInfo {
 impl_stable_hash!(FieldInfo { id, name, kind });
 
 impl FieldInfo {
+    pub fn new(id: FieldId, name: Option<String>, kind: ValueInfo) -> Self {
+        Self { id, name, kind }
+    }
+
     pub fn id(&mut self) -> &FieldId {
         &self.id
     }

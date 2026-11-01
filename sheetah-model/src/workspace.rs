@@ -1,4 +1,5 @@
 use crate::backend::{Backend, BackendKind, BackendOptions};
+use crate::shape::FieldId;
 use crate::table::{Table, TableId, TableName};
 use anyhow::{Result, bail};
 use futures::future::join_all;
@@ -17,6 +18,8 @@ pub struct Workspace {
     backends: HashMap<String, Arc<RwLock<dyn Backend>>>,
     /// A map of store types the workspace can create and use.
     backend_kinds: HashMap<String, BackendKind>,
+    /// The next available field ID to be used.
+    next_field_id: FieldId,
 }
 
 impl Workspace {
@@ -28,6 +31,14 @@ impl Workspace {
                 .insert(kind.name.to_string(), kind.clone());
         }
         this
+    }
+
+    pub fn next_field_id(&mut self) -> FieldId {
+        // TODO(perf): Reuse unused values. #4
+        // TODO(bug): Check for overflow. #3
+        let new = self.next_field_id;
+        self.next_field_id += 1;
+        new
     }
 
     pub async fn list_backend_kinds(&self) -> Vec<String> {
