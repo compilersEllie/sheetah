@@ -12,7 +12,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest] #, windows-latest]
+        os: [ubuntu-latest, windows-latest]
 
     steps:
     - uses: actions/checkout@v6
@@ -22,6 +22,7 @@ jobs:
     - uses: swatinem/rust-cache@v2
 
     - name: Install system packages
+      if: runner.os == 'Linux'
       run: |
         sudo apt update && \
         sudo apt install \
@@ -30,6 +31,12 @@ jobs:
           libjavascriptcoregtk-4.1-dev \
           libsoup-3.0-dev \
           libwebkit2gtk-4.1-dev
+
+    - name: Install cargo-audit
+      run: cargo install cargo-audit
+
+    - name: Security Audit
+      run: cargo audit
 
     - name: Install clippy
       run: rustup component add clippy
