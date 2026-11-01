@@ -1,6 +1,6 @@
-use crate::value::Value;
+use crate::value::{Value, ValueStorage};
 use stable_hash::impl_stable_hash;
-use std::{any::TypeId, sync::Arc};
+use std::{any::{Any, TypeId}, sync::Arc};
 
 #[derive(
     Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, serde::Serialize, serde::Deserialize,
