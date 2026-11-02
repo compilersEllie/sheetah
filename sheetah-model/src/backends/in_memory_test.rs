@@ -6,7 +6,8 @@ mod tests {
     use crate::error::Result;
     use crate::shape::{Dimension, Shape};
     use crate::table::{Table, TableId};
-    use crate::value::{Values, Values2D};
+    use crate::value::{Values, Values2D, ValueStorage, Value, ValueVec};
+    use xar::Xar;
     use std::collections::HashMap;
     use std::path::PathBuf;
 
@@ -131,7 +132,9 @@ mod tests {
             row: Index::new(0),
         };
 
-        let values1 = Values2D::new(Index::new(1), Index::new(1), vec![Box::new(42i32)])?;
+        let mut values = Xar::new();
+        values.push(ValueStorage::I32(42));
+        let values1 = Values2D::new(Index::new(1), Index::new(1), values)?;
         backend.set_data(table_id, &pos, values1).await?;
 
         let view = View {
@@ -306,7 +309,9 @@ mod tests {
         backend.insert(table_id, table).await?;
 
         // Initialize table_data
-        let empty_data = Values2D::new(Index::new(1), Index::new(1), vec![Box::new(0i32)])?;
+        let mut empty_values = Xar::new();
+        empty_values.push(ValueStorage::I32(0));
+        let empty_data = Values2D::new(Index::new(1), Index::new(1), empty_values)?;
         backend
             .set_data(
                 table_id,
@@ -319,17 +324,17 @@ mod tests {
             .await?;
 
         // Test add_column
-        let mut col_values = Values::default();
-        col_values.push(Box::new(100i32));
+        let mut col_values = Xar::new();
+        col_values.push(ValueStorage::I32(100));
         let field_id_1 = 1;
         backend
             .add_column(table_id, field_id_1, Index::new(1), col_values)
             .await?;
 
         // Test add_row
-        let mut row_values = Values::default();
-        row_values.push(Box::new(200i32));
-        row_values.push(Box::new(300i32));
+        let mut row_values = Xar::new();
+        row_values.push(ValueStorage::I32(200));
+        row_values.push(ValueStorage::I32(300));
         let field_id_2 = 2;
         backend
             .add_row(table_id, field_id_2, Index::new(1), row_values)
