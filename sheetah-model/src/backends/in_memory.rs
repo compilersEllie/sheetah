@@ -1,14 +1,15 @@
 use crate::backend::{Backend, BackendKind, BackendOptions};
 use crate::editor::{Index, Pos, View};
-use crate::shape::FieldId;
+use crate::shape::{Dimension, FieldId, Shape};
 use crate::table::{Table, TableId};
-use crate::value::{Value, Values, Values2D, Values2DRef, ValueVec, ValueStorage};
+use crate::value::{Values, Values2D, Values2DRef, ValueVec, ValueStorage, Value};
 use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use xar::Xar;
 
 pub type InMemoryTable = Values2D;
 
@@ -85,7 +86,7 @@ impl Backend for InMemoryBackend {
         let start_col = window.start.column.raw();
         for row in start_row..start_row + window.rows.raw() {
             for col in start_col..start_col + window.columns.raw() {
-                values.push(&table_data.get(Index::new(col), Index::new(row))?);
+                values.push(table_data.get_ref(Index::new(col), Index::new(row))?);
             }
         }
         Values2DRef::new(window.columns, window.rows, values)
@@ -147,7 +148,7 @@ impl Backend for InMemoryBackend {
             .get_mut(&table)
             .with_context(|| format!("Could not get table data for table {:?}", table))?;
 
-        table_data.add_row(row_index, row.into_vec())?;
+        table_data.add_row(row_index, row.into_vec().into())?;
 
         let table_info = self
             .tables
@@ -173,7 +174,7 @@ impl Backend for InMemoryBackend {
             .get_mut(&table)
             .with_context(|| format!("Could not get table data for table {:?}", table))?;
 
-        table_data.add_column(column_index, column.into_vec())?;
+        table_data.add_column(column_index, column.into_vec().into())?;
 
         let table_info = self
             .tables
@@ -198,7 +199,7 @@ impl Backend for InMemoryBackend {
 
         let dims = table_info.dims();
         let num_elements = (dims.column.raw() * dims.row.raw()) as usize;
-        let mut values: Vec<ValueStorage> = Vec::with_capacity(num_elements);
+        let mut values = Xar::new();
         for _ in 0..num_elements {
             values.push(ValueStorage::I32(0));
         }
@@ -293,15 +294,14 @@ mod tests {
         let table = Table::unnamed();
         backend.insert(table_id, table).await?;
 
+        let mut values = Xar::new();
+        for i in 1..=4 {
+            values.push(ValueStorage::I32(i as i32));
+        }
         let table_data = Values2D::new(
             Index::new(2),
             Index::new(2),
-            vec![
-                Box::new(1i32),
-                Box::new(2i32),
-                Box::new(3i32),
-                Box::new(4i32),
-            ],
+            values,
         )?;
         backend.table_data.insert(table_id, table_data);
 
@@ -334,39 +334,33 @@ mod tests {
     async fn test_backend_set_data() -> Result<()> {
         let mut backend = setup_backend();
         let table_id = TableId::new(1);
-        let table = Table::unnamed();
+        let mut shape = Shape::default();
+        shape.columns = Dimension::default();
+        shape.columns.add(None, 2)?;
+        shape.rows = Dimension::default();
+        shape.rows.add(None, 2)?;
+        let table = Table {
+            name: None,
+            dependencies: HashMap::new(),
+            derivation: vec![],
+            shape,
+        };
         backend.insert(table_id, table).await?;
 
+        let mut values = Xar::new();
+        for i in 1..=4 {
+            values.push(ValueStorage::I32(i as i32));
+        }
         let table_data = Values2D::new(
             Index::new(2),
             Index::new(2),
-            vec![
-                Box::new(1i32),
-                Box::new(2i32),
-                Box::new(3i32),
-                Box::new(4i32),
-            ],
+            values,
         )?;
-
-        // TODO(bug): It should be impossible for these to get out of sync.... #2
-        let mut table = Table::unnamed();
-        let new_data = Values2D::new(Index::new(1), Index::new(1), vec![Box::new(10i32)])?;
-
-        table.shape.columns.add(None, 1)?;
-        table.shape.columns.add(None, 2)?;
-        table.shape.rows.add(None, 3)?;
-        table.shape.rows.add(None, 4)?;
-
-        assert_eq!(
-            table.dims(),
-            Pos {
-                column: 2.into(),
-                row: 2.into()
-            }
-        );
-
-        backend.insert(table_id, table).await?;
         backend.table_data.insert(table_id, table_data);
+
+        let mut new_vals = Xar::new();
+        new_vals.push(ValueStorage::I32(10));
+        let new_data = Values2D::new(Index::new(1), Index::new(1), new_vals)?;
 
         let pos = Pos {
             column: Index::new(1),

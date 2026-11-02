@@ -36,7 +36,7 @@ impl StableHash for &dyn Value {
 }
 
 #[repr(align(32))]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum ValueStorage {
     None,
     I8(i8),
@@ -49,6 +49,8 @@ pub enum ValueStorage {
     Str(SmolStr),
     Other(Box<dyn Value>),
 }
+
+pub type ValueVec = Xar<ValueStorage>;
 
 impl Clone for ValueStorage {
     fn clone(&self) -> Self {
@@ -169,7 +171,12 @@ impl Value for f64 {
 impl Value for String {
     fn name(&self) -> String { "text".to_string() }
     fn cloned(&self) -> Box<dyn Value> { Box::new(self.clone()) }
-    fn bytes(&self) -> Vec<u8> { [b's'].into_iter().chain(self.as_bytes().iter().cloned()).collect() }
+    fn bytes(&self) -> Vec<u8> {
+        let mut bytes = vec![b's'];
+        bytes.extend_from_slice(&self.len().to_be_bytes());
+        bytes.extend_from_slice(self.as_bytes());
+        bytes
+    }
 }
 
 #[typetag::serde]
@@ -252,15 +259,85 @@ impl ValueInfo {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Values {
     data: Xar<ValueStorage>,
     shape: Vec<Index>,
     strides: Vec<usize>,
 }
 
+impl Serialize for Values {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("Values", 3)?;
+        let data_vec: Vec<ValueStorage> = self.data.iter().cloned().collect();
+        state.serialize_field("data", &data_vec)?;
+        state.serialize_field("shape", &self.shape)?;
+        state.serialize_field("strides", &self.strides)?;
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for Values {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{self, MapAccess, Visitor};
+        use std::fmt;
+
+        struct ValuesVisitor;
+
+        impl<'de> Visitor<'de> for ValuesVisitor {
+            type Value = Values;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct Values")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<Values, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut data = None;
+                let mut shape = None;
+                let mut strides = None;
+
+                while let Some(key) = map.next_key::<SmolStr>()? {
+                    match key.as_str() {
+                        "data" => {
+                            let vec: Vec<ValueStorage> = map.next_value()?;
+                            data = Some(Xar::from(vec));
+                        }
+                        "shape" => {
+                            shape = Some(map.next_value()?);
+                        }
+                        "strides" => {
+                            strides = Some(map.next_value()?);
+                        }
+                        _ => {
+                            let _: serde::de::IgnoredAny = map.next_value()?;
+                        }
+                    }
+                }
+
+                let data = data.ok_or_else(|| de::Error::missing_field("data"))?;
+                let shape = shape.ok_or_else(|| de::Error::missing_field("shape"))?;
+                let strides = strides.ok_or_else(|| de::Error::missing_field("strides"))?;
+
+                Ok(Values { data, shape, strides })
+            }
+        }
+
+        deserializer.deserialize_struct("Values", &["data", "shape", "strides"], ValuesVisitor)
+    }
+}
+
 impl Values {
-    pub fn new(shape: Vec<Index>, data: Vec<ValueStorage>) -> Result<Self> {
+    pub fn new(shape: Vec<Index>, data: ValueVec) -> Result<Self> {
         let len: usize = shape.iter().map(|i| i.raw() as usize).product();
         if len != data.len() {
             bail!("Dimension mismatch: shape product {} != data length {}", len, data.len());
@@ -286,7 +363,7 @@ impl Values {
             }
             offset += idx.raw() as usize * self.strides[i];
         }
-        Ok(&self.data.get(offset))
+        self.data.get(offset).ok_or_else(|| anyhow::anyhow!("Index out of bounds"))
     }
 
     pub fn set(&mut self, indices: &[Index], value: ValueStorage) -> Result<()> {
@@ -297,7 +374,11 @@ impl Values {
             }
             offset += idx.raw() as usize * self.strides[i];
         }
-        self.data.set(offset, value);
+        if let Some(val) = self.data.get_mut(offset) {
+            *val = value;
+        } else {
+            bail!("Index out of bounds");
+        }
         Ok(())
     }
 
@@ -310,14 +391,78 @@ impl Values {
     }
 
     pub fn into_vec(self) -> Vec<ValueStorage> {
-        self.data
+        self.data.into_iter().collect()
     }
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default)]
 pub struct Values2D {
     pub values: ValueVec,
     pub columns: Index,
+}
+
+impl Serialize for Values2D {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("Values2D", 2)?;
+        let values_vec: Vec<ValueStorage> = self.values.iter().cloned().collect();
+        state.serialize_field("values", &values_vec)?;
+        state.serialize_field("columns", &self.columns)?;
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for Values2D {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{self, MapAccess, Visitor};
+        use std::fmt;
+
+        struct Values2DVisitor;
+
+        impl<'de> Visitor<'de> for Values2DVisitor {
+            type Value = Values2D;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct Values2D")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<Values2D, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut values = None;
+                let mut columns = None;
+
+                while let Some(key) = map.next_key::<SmolStr>()? {
+                    match key.as_str() {
+                        "values" => {
+                            let vec: Vec<ValueStorage> = map.next_value()?;
+                            values = Some(Xar::from(vec));
+                        }
+                        "columns" => {
+                            columns = Some(map.next_value()?);
+                        }
+                        _ => {
+                            let _: serde::de::IgnoredAny = map.next_value()?;
+                        }
+                    }
+                }
+
+                let values = values.ok_or_else(|| de::Error::missing_field("values"))?;
+                let columns = columns.ok_or_else(|| de::Error::missing_field("columns"))?;
+
+                Ok(Values2D { values, columns })
+            }
+        }
+
+        deserializer.deserialize_struct("Values2D", &["values", "columns"], Values2DVisitor)
+    }
 }
 
 impl Values2D {
@@ -383,7 +528,7 @@ impl Values2D {
                 }
             }
         }
-        self.values = new_values;
+        self.values = Xar::from(new_values);
         Ok(())
     }
 
@@ -416,7 +561,7 @@ impl Values2D {
                 }
             }
         }
-        self.values = new_values;
+        self.values = Xar::from(new_values);
         self.columns = Index::new((cols + 1) as u32);
         Ok(())
     }

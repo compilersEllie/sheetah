@@ -2,7 +2,8 @@
 mod tests {
     use crate::editor::{Index, Pos};
     use crate::optic::OpticId;
-    use crate::value::*;
+    use crate::value::{Values, Values2D, Values2DRef, ValueStorage, Value};
+    use xar::Xar;
     use anyhow::Result;
 
     #[test]
@@ -126,7 +127,9 @@ mod tests {
 
     #[test]
     fn test_values2d_new() -> Result<()> {
-        let values: Values = vec![Box::new(1i32), Box::new(2i32)];
+        let mut values = Xar::new();
+        values.push(ValueStorage::I32(1));
+        values.push(ValueStorage::I32(2));
         let res = Values2D::new(Index::new(2), Index::new(1), values);
         assert!(res.is_ok());
         let v2d = res?;
@@ -137,17 +140,22 @@ mod tests {
 
     #[test]
     fn test_values2d_new_fail() {
-        let values: Values = vec![Box::new(1i32)];
+        let mut values = Xar::new();
+        values.push(ValueStorage::I32(1));
         let res = Values2D::new(Index::new(2), Index::new(2), values);
         assert!(res.is_err());
     }
 
     #[test]
     fn test_values2d_add_row() -> Result<()> {
-        let values: Values = vec![Box::new(1i32), Box::new(2i32)];
+        let mut values = Xar::new();
+        values.push(ValueStorage::I32(1));
+        values.push(ValueStorage::I32(2));
         let mut v2d = Values2D::new(Index::new(2), Index::new(1), values)?;
 
-        let new_row: Values = vec![Box::new(3i32), Box::new(4i32)];
+        let mut new_row = Xar::new();
+        new_row.push(ValueStorage::I32(3));
+        new_row.push(ValueStorage::I32(4));
         v2d.add_row(Index::new(1), new_row)?;
 
         assert_eq!(v2d.rows(), Index::new(2));
@@ -172,10 +180,13 @@ mod tests {
 
     #[test]
     fn test_values2d_add_row_fail() -> Result<()> {
-        let values: Values = vec![Box::new(1i32), Box::new(2i32)];
+        let mut values = Xar::new();
+        values.push(ValueStorage::I32(1));
+        values.push(ValueStorage::I32(2));
         let mut v2d = Values2D::new(Index::new(2), Index::new(1), values)?;
 
-        let wrong_row: Values = vec![Box::new(3i32)];
+        let mut wrong_row = Xar::new();
+        wrong_row.push(ValueStorage::I32(3));
         let res = v2d.add_row(Index::new(1), wrong_row);
         assert!(res.is_err());
         Ok(())
@@ -183,13 +194,15 @@ mod tests {
 
     #[test]
     fn test_values2d_get_set() -> Result<()> {
-        let values: Values = vec![Box::new(1i32), Box::new(2i32)];
+        let mut values = Xar::new();
+        values.push(ValueStorage::I32(1));
+        values.push(ValueStorage::I32(2));
         let mut v2d = Values2D::new(Index::new(2), Index::new(1), values)?;
 
         let val = v2d.get(Index::new(1), Index::new(0))?;
         assert_eq!(val.name(), "integer (i32)");
 
-        v2d.set(Index::new(1), Index::new(0), Box::new(3i32))?;
+        v2d.set(Index::new(1), Index::new(0), ValueStorage::I32(3))?;
         let val2 = v2d.get(Index::new(1), Index::new(0))?;
         assert_eq!(val2.name(), "integer (i32)");
         Ok(())
@@ -197,7 +210,9 @@ mod tests {
 
     #[test]
     fn test_values2d_pos_index() -> Result<()> {
-        let values: Values = vec![Box::new(1i32), Box::new(2i32)];
+        let mut values = Xar::new();
+        values.push(ValueStorage::I32(1));
+        values.push(ValueStorage::I32(2));
         let v2d = Values2D::new(Index::new(2), Index::new(1), values)?;
 
         assert_eq!(
@@ -215,7 +230,9 @@ mod tests {
 
     #[test]
     fn test_values2d_dims_len_empty() -> Result<()> {
-        let values: Values = vec![Box::new(1i32), Box::new(2i32)];
+        let mut values = Xar::new();
+        values.push(ValueStorage::I32(1));
+        values.push(ValueStorage::I32(2));
         let v2d = Values2D::new(Index::new(2), Index::new(1), values)?;
 
         assert_eq!(v2d.len(), 2);
@@ -232,9 +249,9 @@ mod tests {
 
     #[test]
     fn test_values2dref() -> Result<()> {
-        let val1 = 1i32;
-        let val2 = 2i32;
-        let values: Vec<&dyn Value> = vec![&val1, &val2];
+        let val1 = ValueStorage::I32(1);
+        let val2 = ValueStorage::I32(2);
+        let values: Vec<&ValueStorage> = vec![&val1, &val2];
 
         let v2dref = Values2DRef::new(Index::new(2), Index::new(1), values)?;
 
@@ -258,10 +275,13 @@ mod tests {
 
     #[test]
     fn test_values2d_add_column() -> Result<()> {
-        let values: Values = vec![Box::new(1i32), Box::new(2i32)];
+        let mut values = Xar::new();
+        values.push(ValueStorage::I32(1));
+        values.push(ValueStorage::I32(2));
         let mut v2d = Values2D::new(Index::new(2), Index::new(1), values)?;
 
-        let new_col: Values = vec![Box::new(3i32)];
+        let mut new_col = Xar::new();
+        new_col.push(ValueStorage::I32(3));
         v2d.add_column(Index::new(1), new_col)?;
 
         assert_eq!(v2d.columns(), Index::new(3));
@@ -282,10 +302,14 @@ mod tests {
 
     #[test]
     fn test_values2d_add_column_fail() -> Result<()> {
-        let values: Values = vec![Box::new(1i32), Box::new(2i32)];
+        let mut values = Xar::new();
+        values.push(ValueStorage::I32(1));
+        values.push(ValueStorage::I32(2));
         let mut v2d = Values2D::new(Index::new(2), Index::new(1), values)?;
 
-        let wrong_col: Values = vec![Box::new(3i32), Box::new(4i32)];
+        let mut wrong_col = Xar::new();
+        wrong_col.push(ValueStorage::I32(3));
+        wrong_col.push(ValueStorage::I32(4));
         let res = v2d.add_column(Index::new(1), wrong_col);
         assert!(res.is_err());
         Ok(())
