@@ -1,6 +1,7 @@
 pub mod backend;
 pub mod backends;
 pub mod editor;
+pub mod error;
 
 #[cfg(test)]
 mod editor_test;
