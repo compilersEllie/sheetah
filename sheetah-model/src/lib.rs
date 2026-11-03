@@ -10,6 +10,8 @@ pub mod optic;
 
 #[cfg(test)]
 mod optic_test;
+
+pub mod optic_store;
 pub mod optics;
 pub mod shape;
 
