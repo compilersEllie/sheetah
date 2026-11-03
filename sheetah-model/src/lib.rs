@@ -2,6 +2,7 @@ pub mod backend;
 pub mod backends;
 pub mod editor;
 pub mod optic;
+pub mod optic_store;
 pub mod optics;
 pub mod shape;
 pub mod table;

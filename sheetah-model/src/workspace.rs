@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use crate::optic_store::OpticStore;
 
 #[derive(Default)]
 pub struct Workspace {
@@ -17,6 +18,8 @@ pub struct Workspace {
     backends: HashMap<String, Arc<RwLock<dyn Backend>>>,
     /// A map of store types the workspace can create and use.
     backend_kinds: HashMap<String, BackendKind>,
+    /// A map of store types the workspace can create and use.
+    optics: OpticStore, // TODO(bug): Do not serialise, make static S.
 }
 
 impl Workspace {
@@ -31,7 +34,7 @@ impl Workspace {
     }
 
     pub async fn list_backend_kinds(&self) -> Vec<String> {
-        let mut backends = Vec::new();
+  u     let mut backends = Vec::new();
         for k in self.backend_kinds.keys() {
             backends.push(k.to_string());
         }
