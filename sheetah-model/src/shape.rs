@@ -1,8 +1,7 @@
 use crate::{
-    editor::{Index, Pos},
-    value::ValueInfo,
+    editor::{Index, Pos}, error::SheetahError, value::ValueInfo,
 };
-use anyhow::{Result, bail};
+use crate::error::Result;
 use stable_hash::{FieldAddress, StableHash, StableHasher, impl_stable_hash};
 
 pub type FieldId = u32;
@@ -126,7 +125,7 @@ impl FieldInfo {
 
     pub fn set_id(&mut self, id: FieldId) -> Result<()> {
         if self.id != 0 {
-            bail!("Field already has id {}", self.id);
+            return Err(SheetahError::InternalError(format!("Field already has id {}", self.id)));
         }
         self.id = id;
         Ok(())

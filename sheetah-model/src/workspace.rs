@@ -1,7 +1,7 @@
 use crate::backend::{Backend, BackendKind, BackendOptions};
+use crate::error::{SheetahError, Result};
 use crate::shape::FieldId;
 use crate::table::{Table, TableId, TableName};
-use anyhow::{Result, bail};
 use futures::future::join_all;
 use std::collections::HashMap;
 use std::path::Path;
@@ -93,10 +93,10 @@ impl Workspace {
     ) -> Result<()> {
         let backend_name = options.name.to_owned();
         if self.backends.contains_key(&backend_name) {
-            bail!("Backend named '{}' already exists", backend_name);
+            return Err(SheetahError::InternalError(format!("Backend named '{}' already exists", backend_name)));
         }
         let Some(backend_kind) = self.backend_kinds.get(&backend_kind_name) else {
-            bail!("No backend kind named '{}'", backend_kind_name);
+            return Err(SheetahError::NoBackendKindError(backend_kind_name));
         };
 
         // Create the backend data.
@@ -121,7 +121,7 @@ impl Workspace {
 
     pub fn get_backend(&self, backend_name: &str) -> Result<Arc<RwLock<dyn Backend>>> {
         let Some(backend) = self.backends.get(backend_name).cloned() else {
-            bail!("No backend named '{}'", backend_name);
+            return Err(SheetahError::NoBackendError(backend_name.to_string()));
         };
         Ok(backend)
     }
@@ -131,7 +131,7 @@ impl Workspace {
         if let Some(name) = &table_name
             && self.named_tables.contains_key(name)
         {
-            bail!("Cannot create table with duplicate name: {:?}", name);
+            return Err(SheetahError::InternalError(format!("Cannot create table with duplicate name: {:?}", name)));
         }
         let id = table.id();
         let backend = self.get_backend(backend_name)?;
@@ -146,14 +146,14 @@ impl Workspace {
 
     pub fn get_backend_for_table_id(&self, id: &TableId) -> Result<Arc<RwLock<dyn Backend>>> {
         let Some(backend_name) = self.table_to_backend.get(id).cloned() else {
-            bail!("No table with id: {:?}", id);
+            return Err(SheetahError::InternalError(format!("No table with id: {:?}", id)));
         };
         self.get_backend(&backend_name)
     }
 
     pub fn get_backend_for_table_name(&self, name: &TableName) -> Result<Arc<RwLock<dyn Backend>>> {
         let Some(table_id) = self.named_tables.get(name).cloned() else {
-            bail!("No table named: {:?}", name);
+            return Err(SheetahError::InternalError(format!("No table named: {:?}", name)));
         };
         self.get_backend_for_table_id(&table_id)
     }

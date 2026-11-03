@@ -1,6 +1,6 @@
 use crate::editor::{Index, Pos};
 use crate::optic::OpticId;
-use anyhow::{Result, bail};
+use crate::error::{Result, SheetahError};
 use stable_hash::{StableHash, StableHasher, impl_stable_hash};
 use std::any::{Any, TypeId};
 use std::fmt::Debug;
@@ -257,13 +257,13 @@ pub struct Values2D {
 
 impl Values2D {
     pub fn new(columns: Index, rows: Index, values: Vec<Box<dyn Value>>) -> Result<Self> {
-        if (columns * rows) as usize != values.len() {
-            bail!(
+        if ((columns * rows) as usize) != values.len() {
+            return Err(SheetahError::InternalError(format!(
                 "Dimensions of values do not match: {} x {} != {}",
                 columns,
                 rows,
                 values.len()
-            );
+            )));
         }
         Ok(Self { values, columns })
     }
@@ -284,16 +284,16 @@ impl Values2D {
     pub fn add_row(&mut self, row_index: Index, values: Values) -> Result<()> {
         let cols = self.columns().raw() as usize;
         if values.len() != cols {
-            bail!(
+            return Err(SheetahError::InternalError(format!(
                 "Wrong number of values: Got {} expected {}",
                 values.len(),
                 cols
-            );
+            )));
         }
         let target_row = row_index.raw() as usize;
         let old_rows = self.rows().raw() as usize;
         if target_row > old_rows {
-            bail!("Row index {} out of range 0..{}", target_row, old_rows);
+            return Err(SheetahError::InternalError(format!("Row index {} out of range 0..{}", target_row, old_rows)));
         }
 
         let mut new_values = Vec::with_capacity((old_rows + 1) * cols);
@@ -320,15 +320,15 @@ impl Values2D {
         let rows = self.rows().raw() as usize;
         let cols = self.columns().raw() as usize;
         if values.len() != rows {
-            bail!(
+            return Err(SheetahError::InternalError(format!(
                 "Wrong number of values: Got {} expected {}",
                 values.len(),
                 rows
-            );
+            )));
         }
         let target_col = column_index.raw() as usize;
         if target_col > cols {
-            bail!("Column index {} out of range 0..{}", target_col, cols);
+            return Err(SheetahError::InternalError(format!("Column index {} out of range 0..{}", target_col, cols)));
         }
 
         let mut new_values = Vec::with_capacity(rows * (cols + 1));
@@ -353,7 +353,7 @@ impl Values2D {
     #[inline]
     pub fn pos(&self, index: Index) -> Result<Pos> {
         if index.raw() as usize >= self.len() {
-            bail!("Index {} out of range 0..{}", index, self.len());
+            return Err(SheetahError::InternalError(format!("Index {} out of range 0..{}", index, self.len())));
         }
         // TODO(perf): Avoid divide methods
         Ok(Pos {
@@ -365,10 +365,10 @@ impl Values2D {
     #[inline]
     pub fn index(&self, column: Index, row: Index) -> Result<Index> {
         if row >= self.rows() {
-            bail!("Row {} out of range 0..{}", row, self.rows());
+            return Err(SheetahError::InternalError(format!("Row {} out of range 0..{}", row, self.rows())));
         }
         if column >= self.columns() {
-            bail!("Column {} out of range 0..{}", column, self.columns());
+            return Err(SheetahError::InternalError(format!("Column {} out of range 0..{}", column, self.columns())));
         }
         Ok(Index::new(row * self.columns) + column)
     }
@@ -410,13 +410,13 @@ pub struct Values2DRef<'a> {
 
 impl<'a> Values2DRef<'a> {
     pub fn new(columns: Index, rows: Index, values: Vec<&'a dyn Value>) -> Result<Self> {
-        if (columns * rows) as usize != values.len() {
-            bail!(
+        if ((columns * rows) as usize) != values.len() {
+            return Err(SheetahError::InternalError(format!(
                 "Dimensions of values do not match: {} x {} != {}",
                 columns,
                 rows,
                 values.len()
-            );
+            )));
         }
         Ok(Self { values, columns })
     }

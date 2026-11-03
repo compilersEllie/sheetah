@@ -6,7 +6,7 @@ mod tests {
     use crate::shape::{Dimension, Shape};
     use crate::table::{Table, TableId};
     use crate::value::{Values, Values2D};
-    use anyhow::Result;
+    use crate::error::Result;
     use std::collections::HashMap;
     use std::path::PathBuf;
 

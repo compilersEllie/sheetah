@@ -5,7 +5,7 @@ authors = ["Ellie Pratt <ellie@skfl.tech>"]
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0.104"
+thiserror = "1.0"
 async-trait = "0.1.92"
 byteorder = "1.5.0"
 futures = "0.3.34"

@@ -5349,7 +5349,6 @@ dependencies = [
 name = "sheetah-model"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "byteorder",
  "futures",
@@ -5360,6 +5359,7 @@ dependencies = [
  "serde",
  "serde_json",
  "stable-hash",
+ "thiserror 1.0.69",
  "tokio",
  "toml 1.1.8+spec-1.1.0",
  "typetag",

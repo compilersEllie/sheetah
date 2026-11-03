@@ -1,10 +1,10 @@
 use crate::backend::{Backend, BackendKind, BackendOptions};
+use async_trait::async_trait;
 use crate::editor::{Index, Pos, View};
 use crate::shape::FieldId;
 use crate::table::{Table, TableId};
 use crate::value::{Value, Values, Values2D, Values2DRef};
-use anyhow::{Context, Result, bail};
-use async_trait::async_trait;
+use crate::error::{Result, SheetahError};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -52,19 +52,19 @@ impl Backend for InMemoryBackend {
 
     async fn get<'a>(&'a self, table_id: &TableId) -> Result<&'a Table> {
         let Some(table_info) = self.tables.get(table_id) else {
-            bail!("No table {:?} found in {}", table_id, self.options.name);
+            return Err(SheetahError::TableNotFound(*table_id));
         };
         Ok(table_info)
     }
 
     async fn get_mut<'a>(&'a mut self, table_id: &TableId) -> Result<&'a mut Table> {
         let Some(table_info) = self.tables.get_mut(table_id) else {
-            bail!("No table {:?} found in {}", table_id, self.options.name);
+            return Err(SheetahError::TableNotFound(*table_id));
         };
         Ok(table_info)
     }
 
-    async fn get_data<'a>(&'a self, view: &View) -> Result<Values2DRef> {
+    async fn get_data(&self, view: &View) -> Result<Values2DRef> {
         let View {
             table,
             cursor: _,
@@ -77,10 +77,9 @@ impl Backend for InMemoryBackend {
         let table_data = self
             .table_data
             .get(table)
-            .with_context(|| format!("Could not get table data for table {:?}", table))?;
+            .ok_or_else(|| SheetahError::BackendError(format!("Could not get table data for table {:?}", table)))?;
 
         let mut values = Vec::with_capacity((window.rows * window.columns) as usize);
-
         let start_row = window.start.row.raw();
         let start_col = window.start.column.raw();
         for row in start_row..start_row + window.rows.raw() {
@@ -88,7 +87,7 @@ impl Backend for InMemoryBackend {
                 values.push(table_data.get(Index::new(col), Index::new(row))?);
             }
         }
-        Values2DRef::new(window.columns, window.rows, values)
+        Ok(Values2DRef::new(window.columns, window.rows, values)?)
     }
 
     async fn set_data<'a, 'b>(
@@ -100,29 +99,23 @@ impl Backend for InMemoryBackend {
         let table_info = self.get(&table).await?;
 
         if pos.column + data.columns() > table_info.dims().column {
-            bail!(
-                "New data at {} with dimensions {} has too many columns for table {:?} with dimensions {}",
-                pos,
-                data.dims(),
-                table,
-                table_info.dims(),
-            );
+            return Err(SheetahError::DimensionMismatch {
+                expected: table_info.dims().column,
+                found: pos.column + data.columns(),
+            });
         }
 
         if pos.row + data.rows() > table_info.dims().row {
-            bail!(
-                "New data at {} with dimensions {} has too many rows for table {:?} with dimensions {}",
-                pos,
-                data.dims(),
-                table,
-                table_info.dims(),
-            );
+            return Err(SheetahError::DimensionMismatch {
+                expected: table_info.dims().row,
+                found: pos.row + data.rows(),
+            });
         }
 
         let table_data = self
             .table_data
             .get_mut(&table)
-            .with_context(|| format!("Could not get table data for table {:?}", table))?;
+            .ok_or_else(|| SheetahError::BackendError(format!("Could not get table data for table {:?}", table)))?;
 
         for index in 0..(data.len() as u32) {
             let cursor = data.pos(index.into())?;
@@ -145,14 +138,14 @@ impl Backend for InMemoryBackend {
         let table_data = self
             .table_data
             .get_mut(&table)
-            .with_context(|| format!("Could not get table data for table {:?}", table))?;
+            .ok_or_else(|| SheetahError::BackendError(format!("Could not get table data for table {:?}", table)))?;
 
         table_data.add_row(row_index, row)?;
 
         let table_info = self
             .tables
             .get_mut(&table)
-            .with_context(|| format!("Table {:?} not found", table))?;
+            .ok_or_else(|| SheetahError::TableNotFound(table))?;
         table_info
             .shape
             .rows
@@ -171,14 +164,14 @@ impl Backend for InMemoryBackend {
         let table_data = self
             .table_data
             .get_mut(&table)
-            .with_context(|| format!("Could not get table data for table {:?}", table))?;
+            .ok_or_else(|| SheetahError::BackendError(format!("Could not get table data for table {:?}", table)))?;
 
         table_data.add_column(column_index, column)?;
 
         let table_info = self
             .tables
             .get_mut(&table)
-            .with_context(|| format!("Table {:?} not found", table))?;
+            .ok_or_else(|| SheetahError::TableNotFound(table))?;
         table_info
             .shape
             .columns
@@ -189,12 +182,8 @@ impl Backend for InMemoryBackend {
 
     async fn insert(&mut self, table: TableId, table_info: Table) -> Result<()> {
         if self.tables.contains_key(&table) {
-            bail!(
-                "Backend {} already has table {:?}",
-                self.options.name,
-                table
-            );
-        };
+            return Err(SheetahError::DuplicateTable(None));
+        }
 
         let dims = table_info.dims();
         let num_elements = (dims.column.raw() * dims.row.raw()) as usize;

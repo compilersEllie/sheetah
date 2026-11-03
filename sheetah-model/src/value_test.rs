@@ -3,7 +3,7 @@ mod tests {
     use crate::editor::{Index, Pos};
     use crate::optic::OpticId;
     use crate::value::*;
-    use anyhow::Result;
+    use crate::error::Result;
 
     #[test]
     fn test_i8_value() {
