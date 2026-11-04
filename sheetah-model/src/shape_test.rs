@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod tests {
     use crate::editor::Index;
+    use crate::error::Result;
     use crate::shape::*;
     use crate::value::ValueInfo;
-    use crate::error::Result;
 
     #[test]
     fn test_dimension_add() -> Result<()> {

@@ -1,5 +1,5 @@
-use crate::{shape::Shape, table::TableId, workspace::Workspace};
 use crate::error::Result;
+use crate::{shape::Shape, table::TableId, workspace::Workspace};
 use stable_hash::impl_stable_hash;
 use std::{
     fmt::Display,

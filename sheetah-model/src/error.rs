@@ -1,4 +1,4 @@
-use crate::editor::{Index};
+use crate::editor::Index;
 use crate::table::{TableId, TableName};
 use thiserror::Error;
 
@@ -11,10 +11,7 @@ pub enum SheetahError {
     DuplicateTable(Option<TableName>),
 
     #[error("Dimension mismatch: expected {expected}, found {found}")]
-    DimensionMismatch {
-        expected: Index,
-        found: Index,
-    },
+    DimensionMismatch { expected: Index, found: Index },
 
     #[error("Invalid index: {0:?}")]
     InvalidIndex(Index),
