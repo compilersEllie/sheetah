@@ -29,6 +29,7 @@ pub trait Optic {
 pub type Functor<S, A> = Arc<Box<dyn Fn(S) -> A>>;
 pub type BiFunctor<S, T, A> = Arc<Box<dyn Fn(S, T) -> A>>;
 
+#[derive(Clone)]
 pub struct Iso<S: Value + 'static, A: Value + 'static> {
     // TODO(mem): Use short string optimisation/interning. #3
     name: String,
@@ -99,6 +100,7 @@ impl<S: Value + 'static, A: Value + 'static> From<Iso<S, A>> for Prism<S, A> {
     }
 }
 
+#[derive(Clone)]
 pub struct Lens<S: Value + 'static, A: Value + 'static> {
     // TODO(mem): Use short string optimisation/interning. #3
     name: String,
@@ -158,6 +160,7 @@ impl<S: Value + Clone + 'static, A: Value + 'static> From<Lens<S, A>> for Traver
     }
 }
 
+#[derive(Clone)]
 pub struct Prism<S: Value + 'static, A: Value + 'static> {
     // TODO(mem): Use short string optimisation/interning. #3
     name: String,
@@ -215,6 +218,7 @@ impl<S: Value + 'static, A: Value + 'static> From<Prism<S, A>> for Traversal<S, 
     }
 }
 
+#[derive(Clone)]
 pub struct Traversal<S: Value + 'static, A: Value + 'static> {
     // TODO(mem): Use short string optimisation/interning. #3
     name: String,
@@ -251,6 +255,7 @@ impl<S: Value + 'static, A: Value + 'static> Optic for Traversal<S, A> {
     }
 }
 
+#[derive(Clone)]
 pub struct Affine<S: Value + 'static, A: Value + 'static> {
     // TODO(mem): Use short string optimisation/interning. #3
     name: String,

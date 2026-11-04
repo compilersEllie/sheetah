@@ -26,8 +26,7 @@ mod tests {
     fn test_lens() {
         let lens = Lens::new("double", |n: i32| n * 2, |n, factor| n * factor);
         assert_eq!(lens.view(5), 10);
-        assert_eq!(lens.set(5, 3), 15); // 5 * 3 = 15? Wait, set_impl is Fn(S, A) -> S
-        // In the test, 5 is source, 3 is field. so 5 * 3 = 15.
+        assert_eq!(lens.set(5, 3), 15); 
     }
 
     #[test]
@@ -89,5 +88,91 @@ mod tests {
         assert_eq!(composed.name(), "add1 | add2");
         assert_eq!(composed.view(5), 8); // (5+1)+2 = 8
         assert_eq!(composed.review(8), 5); // (8-2)-1 = 5
+    }
+
+    #[test]
+    fn test_iso_to_lens_prism() {
+        let iso = Iso::new("add1", |n: i32| n + 1, |n| n - 1);
+        
+        let lens: Lens<i32, i32> = Lens::from(iso.clone());
+        assert_eq!(lens.view(5), 6);
+        assert_eq!(lens.set(5, 10), 9); // review(10) = 9
+
+        let prism: Prism<i32, i32> = Prism::from(iso);
+        assert_eq!(prism.preview(6), Some(7));
+        assert_eq!(prism.review(7), 6);
+    }
+
+    #[test]
+    fn test_lens_to_traversal() {
+        let lens = Lens::new("double", |n: i32| n * 2, |n, factor| n * factor);
+        let traversal: Traversal<i32, i32> = Traversal::from(lens);
+        
+        let f: Functor<i32, i32> = Arc::new(Box::new(|n| n + 1));
+        assert_eq!(traversal.to_list(Some(5)), vec![10]);
+        assert_eq!(traversal.to_list(None), vec![]);
+        assert_eq!(traversal.over(f.clone(), Some(5)), Some(55)); 
+    }
+
+    #[test]
+    fn test_prism_to_traversal() {
+        let prism = Prism::new(
+            "maybe_even",
+            |n: i32| if n % 2 == 0 { Some(n / 2) } else { None },
+            |n| n * 2,
+        );
+        let traversal: Traversal<i32, i32> = Traversal::from(prism);
+        
+        let f: Functor<i32, i32> = Arc::new(Box::new(|n| n + 1));
+        assert_eq!(traversal.to_list(Some(4)), vec![2]);
+        assert_eq!(traversal.to_list(Some(5)), vec![]);
+        assert_eq!(traversal.to_list(None), vec![]);
+        
+        // over(f, Some(4)): 
+        // source is Some(4). 
+        // prism.preview(4) is Some(2).
+        // f(2) = 3.
+        // prism.review(3) = 6.
+        assert_eq!(traversal.over(f.clone(), Some(4)), Some(6));
+        assert_eq!(traversal.over(f, Some(5)), None);
+    }
+
+    #[test]
+    fn test_lens_compose_lens() {
+        let lens1 = Lens::new("double", |n: i32| n * 2, |n, factor| n * factor);
+        let lens2 = Lens::new("add1", |n: i32| n + 1, |n, val| val); // This is not a real lens if it doesn't use old n, but let's see
+        // lens2.set(source, field) = field
+        // Actually, lens2 should be something like:
+        let lens2_real = Lens::new("add1", |n: i32| n + 1, |n, factor| n + factor);
+        
+        let composed = lens1.and_then(lens2_real);
+        // composed.view(5) = lens2.view(lens1.view(5)) = lens2.view(10) = 11
+        assert_eq!(composed.view(5), 11);
+        // composed.set(5, 20):
+        // field = lens2.view(lens1.view(5)) = 11
+        // new_field = lens2.set(lens1.view(5), 20) = 10 + 20 = 30
+        // composed.set(5, 20) = lens1.set(5, 30) = 5 * 30 = 150
+        assert_eq!(composed.set(5, 20), 150);
+    }
+
+    #[test]
+    fn test_affine_to_traversal() {
+        let affine = Affine::new(
+            "maybe_add",
+            |opt: Option<i32>| opt.map(|v| v + 1),
+            |f: Functor<i32, i32>, opt: Option<i32>| {
+                opt.and_then(|s| {
+                    let a = s + 1;
+                    let new_a = f(a);
+                    Some(new_a - 1)
+                })
+            },
+        );
+        let traversal: Traversal<i32, i32> = Traversal::from(affine);
+        let f: Functor<i32, i32> = Arc::new(Box::new(|n| n + 1));
+        
+        assert_eq!(traversal.to_list(Some(5)), vec![6]);
+        assert_eq!(traversal.to_list(None), vec![]);
+        assert_eq!(traversal.over(f.clone(), Some(5)), Some(6)); // 5 -> 6 -> 7 -> 6
     }
 }
