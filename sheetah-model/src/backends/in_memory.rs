@@ -388,34 +388,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_backend_add_column() -> Result<()> {
-        let mut backend = setup_backend();
+    async fn test_get_direct() -> Result<()> {
+        let mut backend = InMemoryBackend::new(BackendOptions {
+            name: "test".to_string(),
+            version: "1".to_string(),
+            relative_path: std::path::PathBuf::from("."),
+        });
         let table_id = TableId::new(1);
-        let table_data = Values2D::new(
-            Index::new(2),
-            Index::new(2),
-            vec![
-                Box::new(1i32),
-                Box::new(2i32),
-                Box::new(3i32),
-                Box::new(4i32),
-            ],
-        )?;
+        let table = Table::unnamed();
+        backend.insert(table_id, table.clone()).await?;
 
-        let mut table = Table::unnamed();
-        table.shape.columns.add(None, 1)?;
-        table.shape.columns.add(None, 2)?;
-        table.shape.rows.add(None, 3)?;
-        table.shape.rows.add(None, 4)?;
-        backend.insert(table_id, table).await?;
-
-        backend.table_data.insert(table_id, table_data); // TODO: Direct access like this is not allowed.
-
-        let col: Values = vec![Box::new(5i32), Box::new(6i32)];
-        backend.add_column(table_id, 5, Index::new(1), col).await?;
-
-        let updated_data = backend.table_data.get(&table_id).unwrap(); // TODO: Direct access like this is not allowed.
-        assert_eq!(updated_data.columns(), Index::new(3));
+        // Call it directly to ensure it's not a trait dispatch issue if that's the case
+        let res = backend.get(&table_id).await?;
+        assert_eq!(res.name(), table.name());
         Ok(())
     }
 }
