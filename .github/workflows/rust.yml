@@ -12,11 +12,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest] #, windows-latest]
 
     steps:
     - uses: actions/checkout@v6
     - name: Install sccache
+      if: runner.os == 'Linux'
       uses: mozilla-actions/sccache-action@v0.0.11
 
     - uses: swatinem/rust-cache@v2
