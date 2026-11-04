@@ -58,6 +58,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_backend_get_mut_missing() {
+        let options = BackendOptions {
+            name: "test".to_string(),
+            version: "0".to_string(),
+            relative_path: PathBuf::from("."),
+        };
+        let mut backend = InMemoryBackend::new(options);
+        let result = backend.get_mut(&TableId::new(999)).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_backend_get_data_missing_table() -> Result<()> {
+        let options = BackendOptions {
+            name: "test".to_string(),
+            version: "0".to_string(),
+            relative_path: PathBuf::from("."),
+        };
+        let backend = InMemoryBackend::new(options);
+        let table_id = TableId::new(1);
+        let view = View {
+            table: table_id,
+            cursor: Pos {
+                column: Index::new(0),
+                row: Index::new(0),
+            },
+            window: Rect {
+                start: Pos {
+                    column: Index::new(0),
+                    row: Index::new(0),
+                },
+                columns: Index::new(1),
+                rows: Index::new(1),
+            },
+            text_start: 0,
+            text_length: 0,
+            selected: vec![],
+            shape: Shape::default(),
+        };
+
+        let result = backend.get_data(&view).await;
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_backend_data_ops() -> Result<()> {
         let options = BackendOptions {
             name: "test".to_string(),
@@ -108,6 +154,131 @@ mod tests {
             "integer (i32)"
         );
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_backend_set_data_dimension_mismatch_column() -> Result<()> {
+        let options = BackendOptions {
+            name: "test".to_string(),
+            version: "0".to_string(),
+            relative_path: PathBuf::from("."),
+        };
+        let mut backend = InMemoryBackend::new(options);
+        let table_id = TableId::new(1);
+
+        let mut shape = Shape::default();
+        shape.columns.add(None, 1)?;
+        shape.columns.add(None, 2)?;
+        shape.rows.add(None, 1)?;
+        shape.rows.add(None, 2)?;
+        let table = Table {
+            name: None,
+            dependencies: HashMap::new(),
+            derivation: vec![],
+            shape,
+        };
+        backend.insert(table_id, table).await?;
+
+        let pos = Pos {
+            column: Index::new(0),
+            row: Index::new(0),
+        };
+
+        let values = Values2D::new(
+            Index::new(3),
+            Index::new(1),
+            vec![Box::new(1i32), Box::new(2i32), Box::new(3i32)],
+        )?;
+
+        let result = backend.set_data(table_id, &pos, values).await;
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_backend_set_data_dimension_mismatch_row() -> Result<()> {
+        let options = BackendOptions {
+            name: "test".to_string(),
+            version: "0".to_string(),
+            relative_path: PathBuf::from("."),
+        };
+        let mut backend = InMemoryBackend::new(options);
+        let table_id = TableId::new(1);
+
+        let mut shape = Shape::default();
+        shape.columns.add(None, 1)?;
+        shape.rows.add(None, 1)?;
+        let table = Table {
+            name: None,
+            dependencies: HashMap::new(),
+            derivation: vec![],
+            shape,
+        };
+        backend.insert(table_id, table).await?;
+
+        let pos = Pos {
+            column: Index::new(0),
+            row: Index::new(0),
+        };
+
+        let values = Values2D::new(
+            Index::new(1),
+            Index::new(2),
+            vec![Box::new(1i32), Box::new(2i32)],
+        )?;
+
+        let result = backend.set_data(table_id, &pos, values).await;
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_backend_set_data_missing_table() -> Result<()> {
+        let options = BackendOptions {
+            name: "test".to_string(),
+            version: "0".to_string(),
+            relative_path: PathBuf::from("."),
+        };
+        let mut backend = InMemoryBackend::new(options);
+        let table_id = TableId::new(1);
+        let pos = Pos {
+            column: Index::new(0),
+            row: Index::new(0),
+        };
+        let values = Values2D::new(Index::new(1), Index::new(1), vec![Box::new(1i32)])?;
+        let result = backend.set_data(table_id, &pos, values).await;
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_backend_add_row_missing_table() -> Result<()> {
+        let options = BackendOptions {
+            name: "test".to_string(),
+            version: "0".to_string(),
+            relative_path: PathBuf::from("."),
+        };
+        let mut backend = InMemoryBackend::new(options);
+        let table_id = TableId::new(1);
+        let row: Values = vec![Box::new(1i32)];
+        let result = backend.add_row(table_id, 1, Index::new(0), row).await;
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_backend_add_column_missing_table() -> Result<()> {
+        let options = BackendOptions {
+            name: "test".to_string(),
+            version: "0".to_string(),
+            relative_path: PathBuf::from("."),
+        };
+        let mut backend = InMemoryBackend::new(options);
+        let table_id = TableId::new(1);
+        let col: Values = vec![Box::new(1i32)];
+        let result = backend.add_column(table_id, 1, Index::new(0), col).await;
+        assert!(result.is_err());
         Ok(())
     }
 
