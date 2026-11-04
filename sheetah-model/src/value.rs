@@ -1,6 +1,6 @@
 use crate::editor::{Index, Pos};
-use crate::optic::OpticId;
 use crate::error::{Result, SheetahError};
+use crate::optic::OpticId;
 use stable_hash::{StableHash, StableHasher, impl_stable_hash};
 use std::any::{Any, TypeId};
 use std::fmt::Debug;
@@ -293,7 +293,10 @@ impl Values2D {
         let target_row = row_index.raw() as usize;
         let old_rows = self.rows().raw() as usize;
         if target_row > old_rows {
-            return Err(SheetahError::InternalError(format!("Row index {} out of range 0..{}", target_row, old_rows)));
+            return Err(SheetahError::InternalError(format!(
+                "Row index {} out of range 0..{}",
+                target_row, old_rows
+            )));
         }
 
         let mut new_values = Vec::with_capacity((old_rows + 1) * cols);
@@ -328,7 +331,10 @@ impl Values2D {
         }
         let target_col = column_index.raw() as usize;
         if target_col > cols {
-            return Err(SheetahError::InternalError(format!("Column index {} out of range 0..{}", target_col, cols)));
+            return Err(SheetahError::InternalError(format!(
+                "Column index {} out of range 0..{}",
+                target_col, cols
+            )));
         }
 
         let mut new_values = Vec::with_capacity(rows * (cols + 1));
@@ -353,7 +359,11 @@ impl Values2D {
     #[inline]
     pub fn pos(&self, index: Index) -> Result<Pos> {
         if index.raw() as usize >= self.len() {
-            return Err(SheetahError::InternalError(format!("Index {} out of range 0..{}", index, self.len())));
+            return Err(SheetahError::InternalError(format!(
+                "Index {} out of range 0..{}",
+                index,
+                self.len()
+            )));
         }
         // TODO(perf): Avoid divide methods
         Ok(Pos {
@@ -365,10 +375,18 @@ impl Values2D {
     #[inline]
     pub fn index(&self, column: Index, row: Index) -> Result<Index> {
         if row >= self.rows() {
-            return Err(SheetahError::InternalError(format!("Row {} out of range 0..{}", row, self.rows())));
+            return Err(SheetahError::InternalError(format!(
+                "Row {} out of range 0..{}",
+                row,
+                self.rows()
+            )));
         }
         if column >= self.columns() {
-            return Err(SheetahError::InternalError(format!("Column {} out of range 0..{}", column, self.columns())));
+            return Err(SheetahError::InternalError(format!(
+                "Column {} out of range 0..{}",
+                column,
+                self.columns()
+            )));
         }
         Ok(Index::new(row * self.columns) + column)
     }

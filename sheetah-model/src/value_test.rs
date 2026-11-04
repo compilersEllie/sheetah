@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod tests {
     use crate::editor::{Index, Pos};
+    use crate::error::Result;
     use crate::optic::OpticId;
     use crate::value::*;
-    use crate::error::Result;
 
     #[test]
     fn test_i8_value() {

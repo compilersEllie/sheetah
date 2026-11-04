@@ -3,10 +3,10 @@ mod tests {
     use crate::backend::{Backend, BackendOptions};
     use crate::backends::in_memory::InMemoryBackend;
     use crate::editor::{Index, Pos, Rect, View};
+    use crate::error::Result;
     use crate::shape::{Dimension, Shape};
     use crate::table::{Table, TableId};
     use crate::value::{Values, Values2D};
-    use crate::error::Result;
     use std::collections::HashMap;
     use std::path::PathBuf;
 
@@ -132,7 +132,6 @@ mod tests {
             derivation: vec![],
             shape,
         };
-
         backend.insert(table_id, table).await?;
 
         // Initialize table_data

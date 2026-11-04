@@ -1,8 +1,8 @@
 use crate::editor::{Index, Pos, View};
+use crate::error::Result;
 use crate::shape::FieldId;
 use crate::table::{Table, TableId};
 use crate::value::{Values, Values2D, Values2DRef};
-use crate::error::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
 use std::path::PathBuf;

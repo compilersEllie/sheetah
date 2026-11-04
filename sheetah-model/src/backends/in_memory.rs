@@ -1,10 +1,10 @@
 use crate::backend::{Backend, BackendKind, BackendOptions};
-use async_trait::async_trait;
 use crate::editor::{Index, Pos, View};
+use crate::error::{Result, SheetahError};
 use crate::shape::FieldId;
 use crate::table::{Table, TableId};
 use crate::value::{Value, Values, Values2D, Values2DRef};
-use crate::error::{Result, SheetahError};
+use async_trait::async_trait;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -74,10 +74,9 @@ impl Backend for InMemoryBackend {
             selected: _,
             shape: _, // TODO(feat): Handle shape #1
         } = view;
-        let table_data = self
-            .table_data
-            .get(table)
-            .ok_or_else(|| SheetahError::BackendError(format!("Could not get table data for table {:?}", table)))?;
+        let table_data = self.table_data.get(table).ok_or_else(|| {
+            SheetahError::BackendError(format!("Could not get table data for table {:?}", table))
+        })?;
 
         let mut values = Vec::with_capacity((window.rows * window.columns) as usize);
         let start_row = window.start.row.raw();
@@ -112,10 +111,9 @@ impl Backend for InMemoryBackend {
             });
         }
 
-        let table_data = self
-            .table_data
-            .get_mut(&table)
-            .ok_or_else(|| SheetahError::BackendError(format!("Could not get table data for table {:?}", table)))?;
+        let table_data = self.table_data.get_mut(&table).ok_or_else(|| {
+            SheetahError::BackendError(format!("Could not get table data for table {:?}", table))
+        })?;
 
         for index in 0..(data.len() as u32) {
             let cursor = data.pos(index.into())?;
@@ -135,10 +133,9 @@ impl Backend for InMemoryBackend {
         row_index: Index,
         row: Values,
     ) -> Result<()> {
-        let table_data = self
-            .table_data
-            .get_mut(&table)
-            .ok_or_else(|| SheetahError::BackendError(format!("Could not get table data for table {:?}", table)))?;
+        let table_data = self.table_data.get_mut(&table).ok_or_else(|| {
+            SheetahError::BackendError(format!("Could not get table data for table {:?}", table))
+        })?;
 
         table_data.add_row(row_index, row)?;
 
@@ -161,10 +158,9 @@ impl Backend for InMemoryBackend {
         column_index: Index,
         column: Values,
     ) -> Result<()> {
-        let table_data = self
-            .table_data
-            .get_mut(&table)
-            .ok_or_else(|| SheetahError::BackendError(format!("Could not get table data for table {:?}", table)))?;
+        let table_data = self.table_data.get_mut(&table).ok_or_else(|| {
+            SheetahError::BackendError(format!("Could not get table data for table {:?}", table))
+        })?;
 
         table_data.add_column(column_index, column)?;
 
