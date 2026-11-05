@@ -140,12 +140,9 @@ mod tests {
     #[test]
     fn test_lens_compose_lens() {
         let lens1 = Lens::new("double", |n: i32| n * 2, |n, factor| n * factor);
-        let lens2 = Lens::new("add1", |n: i32| n + 1, |n, val| val); // This is not a real lens if it doesn't use old n, but let's see
-        // lens2.set(source, field) = field
-        // Actually, lens2 should be something like:
-        let lens2_real = Lens::new("add1", |n: i32| n + 1, |n, factor| n + factor);
+        let lens2 = Lens::new("add1", |n: i32| n + 1, |n, factor| n + factor);
 
-        let composed = lens1.and_then(lens2_real);
+        let composed = lens1.and_then(lens2);
         // composed.view(5) = lens2.view(lens1.view(5)) = lens2.view(10) = 11
         assert_eq!(composed.view(5), 11);
         // composed.set(5, 20):
