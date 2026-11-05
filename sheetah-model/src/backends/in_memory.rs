@@ -403,4 +403,96 @@ mod tests {
         assert_eq!(res.name(), table.name());
         Ok(())
     }
+
+    #[tokio::test]
+    async fn test_backend_get_data_missing_table_data() -> Result<()> {
+        let options = BackendOptions {
+            name: "test".to_string(),
+            version: "0".to_string(),
+            relative_path: PathBuf::from("."),
+        };
+        let mut backend = InMemoryBackend::new(options);
+        let table_id = TableId::new(1);
+        let table = Table::unnamed();
+        backend.insert(table_id, table).await?;
+
+        // Manually remove from table_data to trigger the error
+        backend.table_data.remove(&table_id);
+
+        let view = View {
+            table: table_id,
+            cursor: Pos {
+                column: Index::new(0),
+                row: Index::new(0),
+            },
+            window: Rect {
+                start: Pos {
+                    column: Index::new(0),
+                    row: Index::new(0),
+                },
+                columns: Index::new(1),
+                rows: Index::new(1),
+            },
+            text_start: 0,
+            text_length: 0,
+            selected: vec![],
+            shape: Default::default(),
+        };
+
+        let result = backend.get_data(&view).await;
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_backend_add_row_missing_table_info() -> Result<()> {
+        let options = BackendOptions {
+            name: "test".to_string(),
+            version: "0".to_string(),
+            relative_path: PathBuf::from("."),
+        };
+        let mut backend = InMemoryBackend::new(options);
+        let table_id = TableId::new(1);
+
+        let table_data = Values2D::new(Index::new(1), Index::new(1), vec![Box::new(0i32)])?;
+        backend.table_data.insert(table_id, table_data);
+        // Note: table_id is NOT in backend.tables
+
+        let row: Values = vec![Box::new(1i32)];
+        let result = backend.add_row(table_id, 1, Index::new(0), row).await;
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_backend_add_column_missing_table_info() -> Result<()> {
+        let options = BackendOptions {
+            name: "test".to_string(),
+            version: "0".to_string(),
+            relative_path: PathBuf::from("."),
+        };
+        let mut backend = InMemoryBackend::new(options);
+        let table_id = TableId::new(1);
+
+        let table_data = Values2D::new(Index::new(1), Index::new(1), vec![Box::new(0i32)])?;
+        backend.table_data.insert(table_id, table_data);
+        // Note: table_id is NOT in backend.tables
+
+        let col: Values = vec![Box::new(1i32)];
+        let result = backend.add_column(table_id, 1, Index::new(0), col).await;
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_backend_destroy() -> Result<()> {
+        let options = BackendOptions {
+            name: "test".to_string(),
+            version: "0".to_string(),
+            relative_path: PathBuf::from("."),
+        };
+        let mut backend = InMemoryBackend::new(options);
+        backend.destroy().await?;
+        Ok(())
+    }
 }

@@ -26,7 +26,7 @@ mod tests {
     fn test_lens() {
         let lens = Lens::new("double", |n: i32| n * 2, |n, factor| n * factor);
         assert_eq!(lens.view(5), 10);
-        assert_eq!(lens.set(5, 3), 15); 
+        assert_eq!(lens.set(5, 3), 15);
     }
 
     #[test]
@@ -93,7 +93,7 @@ mod tests {
     #[test]
     fn test_iso_to_lens_prism() {
         let iso = Iso::new("add1", |n: i32| n + 1, |n| n - 1);
-        
+
         let lens: Lens<i32, i32> = Lens::from(iso.clone());
         assert_eq!(lens.view(5), 6);
         assert_eq!(lens.set(5, 10), 9); // review(10) = 9
@@ -107,11 +107,11 @@ mod tests {
     fn test_lens_to_traversal() {
         let lens = Lens::new("double", |n: i32| n * 2, |n, factor| n * factor);
         let traversal: Traversal<i32, i32> = Traversal::from(lens);
-        
+
         let f: Functor<i32, i32> = Arc::new(Box::new(|n| n + 1));
         assert_eq!(traversal.to_list(Some(5)), vec![10]);
         assert_eq!(traversal.to_list(None), vec![]);
-        assert_eq!(traversal.over(f.clone(), Some(5)), Some(55)); 
+        assert_eq!(traversal.over(f.clone(), Some(5)), Some(55));
     }
 
     #[test]
@@ -122,14 +122,14 @@ mod tests {
             |n| n * 2,
         );
         let traversal: Traversal<i32, i32> = Traversal::from(prism);
-        
+
         let f: Functor<i32, i32> = Arc::new(Box::new(|n| n + 1));
         assert_eq!(traversal.to_list(Some(4)), vec![2]);
         assert_eq!(traversal.to_list(Some(5)), vec![]);
         assert_eq!(traversal.to_list(None), vec![]);
-        
-        // over(f, Some(4)): 
-        // source is Some(4). 
+
+        // over(f, Some(4)):
+        // source is Some(4).
         // prism.preview(4) is Some(2).
         // f(2) = 3.
         // prism.review(3) = 6.
@@ -144,7 +144,7 @@ mod tests {
         // lens2.set(source, field) = field
         // Actually, lens2 should be something like:
         let lens2_real = Lens::new("add1", |n: i32| n + 1, |n, factor| n + factor);
-        
+
         let composed = lens1.and_then(lens2_real);
         // composed.view(5) = lens2.view(lens1.view(5)) = lens2.view(10) = 11
         assert_eq!(composed.view(5), 11);
@@ -170,7 +170,7 @@ mod tests {
         );
         let traversal: Traversal<i32, i32> = Traversal::from(affine);
         let f: Functor<i32, i32> = Arc::new(Box::new(|n| n + 1));
-        
+
         assert_eq!(traversal.to_list(Some(5)), vec![6]);
         assert_eq!(traversal.to_list(None), vec![]);
         assert_eq!(traversal.over(f.clone(), Some(5)), Some(6)); // 5 -> 6 -> 7 -> 6
