@@ -11,8 +11,8 @@
 mod fonts;
 
 use gpui::{
-    App, Bounds, Context, FocusHandle, Focusable, Render, Task, Window, WindowBounds,
-    WindowOptions, actions, div, prelude::*, px, rgb, size,
+    actions, div, prelude::*, px, rgb, size, App, Bounds, Context, FocusHandle, Focusable, Render,
+    Task, Window, WindowBounds, WindowOptions,
 };
 use gpui_platform::application;
 
