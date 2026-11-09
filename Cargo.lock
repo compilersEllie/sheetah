@@ -5209,6 +5209,7 @@ dependencies = [
 name = "sheetah-gpui"
 version = "0.1.0"
 dependencies = [
+ "futures",
  "gpui-fast",
  "gpui-fast-platform",
  "rand 0.10.3",
