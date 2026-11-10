@@ -61,3 +61,16 @@ Project → Backend (e.g., "Finance") → Table (e.g., "Budget") → Views (e.g.
 3. Independent panes
 4. Global search (content + markdown)
 5. Dark mode default
+
+### Layout
+
+Left side:
+  Top: File&Backend tree
+  Bottom: Task management (top tasks, new task entry), expands to Kanban view
+
+Centre:
+  Panes in flexible customizable layout
+    Each pane showing a different table/note/chart
+
+Right side:
+  Today's note OR daily note OR Calendar
