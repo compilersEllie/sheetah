@@ -46,9 +46,34 @@ mod tests {
             dependencies: Default::default(),
             derivation: vec![],
             shape,
+            views: vec![],
         };
 
         assert_eq!(table.dims().column, Index::new(3));
         assert_eq!(table.dims().row, Index::new(2));
+    }
+
+    #[test]
+    fn test_search_by_tag() {
+        let view1 = View::new("View 1", vec!["sales".to_string(), "finance".to_string()]);
+        let view2 = View::new("View 2", vec!["marketing".to_string()]);
+        let view3 = View::new("View 3", vec!["sales".to_string()]);
+
+        let views = vec![view1.clone(), view2.clone(), view3.clone()];
+
+        // Search for #sales
+        let sales_views = search_by_tag(&views, "sales");
+        assert_eq!(sales_views.len(), 2);
+        assert!(sales_views.contains(&view1));
+        assert!(sales_views.contains(&view3));
+
+        // Search for #marketing
+        let marketing_views = search_by_tag(&views, "marketing");
+        assert_eq!(marketing_views.len(), 1);
+        assert_eq!(marketing_views[0].name(), "View 2");
+
+        // Search for something non-existent
+        let none_views = search_by_tag(&views, "nonexistent");
+        assert_eq!(none_views.len(), 0);
     }
 }

@@ -1,7 +1,7 @@
 #![cfg_attr(target_family = "wasm", no_main)]
 //! Example demonstrating GPUI's testing infrastructure.
 //!
-//! When run normally, this displays an interactive counter window.
+//! When run normally, this displays an interactive root window.
 //! The tests below demonstrate various GPUI testing patterns.
 //!
 //! Run the app: cargo run -p gpui --example testing
@@ -11,29 +11,66 @@
 mod tests;
 
 mod fonts;
+mod model;
 
 use gpui::{
     actions, div, prelude::*, px, rgb, size, App, Bounds, Context, FocusHandle, Focusable, Render,
     Task, Window, WindowBounds, WindowOptions,
 };
 use gpui_platform::application;
+use model::{Project, Backend, Table, View};
 
-actions!(counter, [Increment, Decrement]);
+actions!(AppState, [Increment, Decrement]);
 
-struct Counter {
-    count: i32,
-    focus_handle: FocusHandle,
-    _subscription: gpui::Subscription,
+pub struct AppState {
+    pub project: Project,
 }
 
-/// Event emitted by Counter
-struct CounterEvent;
+impl AppState {
+    pub fn new(cx: &mut Context<Self>) -> Self {
+        Self {
+            project: Project {
+                name: "Unnamed".to_owned(),
+                backends: vec![
+                    Backend {
+                        name: "Finance".to_owned(),
+                        tables: vec![
+                            Table {
+                                name: "Budget".to_owned(),
+                                views: vec![
+                                    View {
+                                        id: "1".to_owned(),
+                                        name: "Q3 Summary".to_owned(),
+                                        tags: vec!["#finance".to_owned()],
+                                        content: "".to_owned(),
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ],
+            },
+        }
+    }
+}
 
-impl gpui::EventEmitter<CounterEvent> for Counter {}
+impl Render for AppState {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .size_full()
+            .flex()
+            .child(div().text_xl().text_color(rgb(0xcdd6f4)).child(&self.project.name))
+    }
+}
 
-impl Counter {
+/// Event emitted by AppState
+struct AppStateEvent;
+
+impl gpui::EventEmitter<AppStateEvent> for AppState {}
+
+impl AppState {
     fn new(cx: &mut Context<Self>) -> Self {
-        let subscription = cx.subscribe_self(|this: &mut Self, _event: &CounterEvent, _cx| {
+        let subscription = cx.subscribe_self(|this: &mut Self, _event: &AppStateEvent, _cx| {
             this.count = 999;
         });
 
@@ -57,8 +94,8 @@ impl Counter {
     fn load(&self, cx: &mut Context<Self>) -> Task<()> {
         cx.spawn(async move |this, cx| {
             // Simulate loading data (e.g., from disk or network)
-            this.update(cx, |counter, cx| {
-                counter.count = 100;
+            this.update(cx, |root, cx| {
+                root.count = 100;
                 cx.notify();
             })
             .ok();
@@ -68,8 +105,8 @@ impl Counter {
     fn reload(&self, cx: &mut Context<Self>) {
         cx.spawn(async move |this, cx| {
             // Simulate reloading data in the background
-            this.update(cx, |counter, cx| {
-                counter.count += 50;
+            this.update(cx, |root, cx| {
+                root.count += 50;
                 cx.notify();
             })
             .ok();
@@ -78,17 +115,17 @@ impl Counter {
     }
 }
 
-impl Focusable for Counter {
+impl Focusable for AppState {
     fn focus_handle(&self, _cx: &App) -> FocusHandle {
         self.focus_handle.clone()
     }
 }
 
-impl Render for Counter {
+impl Render for AppState {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
-            .id("counter")
-            .key_context("Counter")
+            .id("root")
+            .key_context("AppState")
             .on_action(cx.listener(Self::increment))
             .on_action(cx.listener(Self::decrement))
             .track_focus(&self.focus_handle)
@@ -190,8 +227,8 @@ fn run_example() {
             return;
         }
         cx.bind_keys([
-            gpui::KeyBinding::new("up", Increment, Some("Counter")),
-            gpui::KeyBinding::new("down", Decrement, Some("Counter")),
+            gpui::KeyBinding::new("up", Increment, Some("AppState")),
+            gpui::KeyBinding::new("down", Decrement, Some("AppState")),
         ]);
 
         let bounds = Bounds::centered(None, size(px(300.), px(200.)), cx);
@@ -201,9 +238,9 @@ fn run_example() {
                 ..Default::default()
             },
             |window, cx| {
-                let counter = cx.new(Counter::new);
-                counter.focus_handle(cx).focus(window, cx);
-                counter
+                let root = cx.new(AppState::new);
+                root.focus_handle(cx).focus(window, cx);
+                root
             },
         )
         .unwrap();

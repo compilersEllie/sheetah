@@ -123,6 +123,7 @@ mod tests {
             dependencies: HashMap::new(),
             derivation: vec![],
             shape: shape1,
+            views: vec![],
         };
         backend.insert(table_id, table1).await?;
 
@@ -176,6 +177,7 @@ mod tests {
             name: None,
             dependencies: HashMap::new(),
             derivation: vec![],
+            views: vec![],
             shape,
         };
         backend.insert(table_id, table).await?;
@@ -213,6 +215,7 @@ mod tests {
             name: None,
             dependencies: HashMap::new(),
             derivation: vec![],
+            views: vec![],
             shape,
         };
         backend.insert(table_id, table).await?;
@@ -301,6 +304,7 @@ mod tests {
             name: None,
             dependencies: HashMap::new(),
             derivation: vec![],
+            views: vec![],
             shape,
         };
         backend.insert(table_id, table).await?;
