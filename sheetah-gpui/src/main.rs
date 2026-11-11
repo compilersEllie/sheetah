@@ -1,5 +1,4 @@
 #![cfg_attr(target_family = "wasm", no_main)]
-
 //! Example demonstrating GPUI's testing infrastructure.
 //!
 //! When run normally, this displays an interactive counter window.
@@ -7,6 +6,9 @@
 //!
 //! Run the app: cargo run -p gpui --example testing
 //! Run tests:   cargo test -p gpui --example testing --features test-support
+
+#[cfg(test)]
+mod tests;
 
 mod fonts;
 
@@ -220,341 +222,146 @@ pub fn start() {
     run_example();
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use gpui::{TestAppContext, VisualTestContext};
-    use rand::prelude::*;
+#[derive(Clone)]
+pub struct GridView {
+    pub tags: Vec<String>,
+}
+impl Render for GridView {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+    }
+}
 
-    /// Here's a basic GPUI test. Just add the macro and take a TestAppContext as an argument!
-    ///
-    /// Note that synchronous side effects run immediately after your "update*" calls complete.
-    #[gpui::test]
-    fn basic_testing(cx: &mut TestAppContext) {
-        let counter = cx.new(|cx| Counter::new(cx));
-
-        counter.update(cx, |counter, _| {
-            counter.count = 42;
-        });
-
-        // Note that TestAppContext doesn't support `read(cx)`
-        let updated = counter.read_with(cx, |counter, _| counter.count);
-        assert_eq!(updated, 42);
-
-        // Emit an event - the subscriber will run immediately after the update finishes
-        counter.update(cx, |_, cx| {
-            cx.emit(CounterEvent);
-        });
-
-        let count_after_update = counter.read_with(cx, |counter, _| counter.count);
-        assert_eq!(
-            count_after_update, 999,
-            "Side effects should run after update completes"
-        );
+impl GridView {
+    pub fn new() -> Self {
+        Self { tags: vec![] }
     }
 
-    /// Tests which involve the window require you to construct a VisualTestContext.
-    /// Just like synchronous side effects, the window will be drawn after every "update*"
-    /// call, so you can test render-dependent behavior.
-    #[gpui::test]
-    fn test_counter_in_window(cx: &mut TestAppContext) {
-        let window = cx.update(|cx| {
-            cx.open_window(Default::default(), |_, cx| cx.new(|cx| Counter::new(cx)))
-                .unwrap()
-        });
-
-        let mut cx = VisualTestContext::from_window(window.into(), cx);
-        let counter = window.root(&mut cx).unwrap();
-
-        // Action dispatch depends on the element tree to resolve which action handler
-        // to call, and this works exactly as you'd expect in a test.
-        let focus_handle = counter.read_with(&cx, |counter, _| counter.focus_handle.clone());
-        cx.update(|window, cx| {
-            focus_handle.dispatch_action(&Increment, window, cx);
-        });
-
-        let count_after = counter.read_with(&cx, |counter, _| counter.count);
-        assert_eq!(
-            count_after, 1,
-            "Action dispatched via focus handle should increment"
-        );
+    pub fn search(&self, query: &str) -> Vec<String> {
+        let lower_query = query.to_lowercase();
+        self.tags
+            .iter()
+            .filter(|tag| tag.to_lowercase().contains(&lower_query))
+            .cloned()
+            .collect()
     }
+}
 
-    /// GPUI tests can also be async, simply add the async keyword before the test.
-    /// Note that the test executor is single thread, so async side effects (including
-    /// background tasks) won't run until you explicitly yield control.
-    #[gpui::test]
-    async fn test_async_operations(cx: &mut TestAppContext) {
-        let counter = cx.new(|cx| Counter::new(cx));
-
-        // Tasks can be awaited directly
-        counter.update(cx, |counter, cx| counter.load(cx)).await;
-
-        let count = counter.read_with(cx, |counter, _| counter.count);
-        assert_eq!(count, 100, "Load task should have set count to 100");
-
-        // But side effects don't run until you yield control
-        counter.update(cx, |counter, cx| counter.reload(cx));
-
-        let count = counter.read_with(cx, |counter, _| counter.count);
-        assert_eq!(count, 100, "Detached reload task shouldn't have run yet");
-
-        // This runs all pending tasks
-        cx.run_until_parked();
-
-        let count = counter.read_with(cx, |counter, _| counter.count);
-        assert_eq!(count, 150, "Reload task should have run after parking");
+impl Default for GridView {
+    fn default() -> Self {
+        Self::new()
     }
+}
 
-    /// Note that the test executor panics if you await a future that waits on
-    /// something outside GPUI's control, like a reading a file or network IO.
-    /// You should mock external systems where possible, as this feature can be used
-    /// to detect potential deadlocks in your async code.
-    ///
-    /// However, if you want to disable this check use `allow_parking()`
-    #[gpui::test]
-    async fn test_allow_parking(cx: &mut TestAppContext) {
-        // Allow the thread to park
-        cx.executor().allow_parking();
+#[derive(Debug, PartialEq, Clone)]
+pub enum Block {
+    Text(String),
+    Chart(String),
+}
 
-        // Simulate an external system (like a file system) with an OS thread
-        let (tx, rx) = futures::channel::oneshot::channel();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(5));
-            tx.send(42).ok();
-        });
-
-        // Without allow_parking(), this await would panic because GPUI's
-        // scheduler runs out of tasks while waiting for the external thread.
-        let result = rx.await.unwrap();
-        assert_eq!(result, 42);
+#[derive(Clone)]
+pub struct MarkdownEditor {
+    pub content: String,
+}
+impl MarkdownEditor {
+    pub fn new() -> Self {
+        Self {
+            content: String::new(),
+        }
     }
+    pub fn set_content(&mut self, content: &str, _cx: &mut impl gpui::AppContext) {
+        self.content = content.to_string();
+    }
+    pub fn content(&self) -> &str {
+        &self.content
+    }
+    pub fn get_blocks(&self) -> Vec<Block> {
+        let mut blocks = Vec::new();
+        let mut current_pos = 0;
+        let pattern_start = "```chart ";
+        let pattern_end = "```";
 
-    /// GPUI also provides support for property testing, via the iterations flag
-    #[gpui::test(iterations = 10)]
-    fn test_counter_random_operations(cx: &mut TestAppContext, mut rng: StdRng) {
-        let window = cx.update(|cx| {
-            cx.open_window(Default::default(), |_, cx| cx.new(|cx| Counter::new(cx)))
-                .unwrap()
-        });
-        let mut cx = VisualTestContext::from_window(window.into(), cx);
+        while let Some(start_idx) = self.content[current_pos..].find(pattern_start) {
+            let absolute_start = current_pos + start_idx;
 
-        let counter = cx.new(|cx| Counter::new(cx));
+            // Add text before the chart block
+            if absolute_start > current_pos {
+                blocks.push(Block::Text(
+                    self.content[current_pos..absolute_start].to_string(),
+                ));
+            }
 
-        // Perform random increments/decrements
-        let mut expected = 0i32;
-        for _ in 0..100 {
-            if rng.random_bool(0.5) {
-                expected += 1;
-                counter.update_in(&mut cx, |counter, window, cx| {
-                    counter.increment(&Increment, window, cx)
-                });
+            let chart_start = absolute_start + pattern_start.len();
+            if let Some(end_idx) = self.content[chart_start..].find(pattern_end) {
+                let absolute_end = chart_start + end_idx;
+                blocks.push(Block::Chart(
+                    self.content[chart_start..absolute_end].to_string(),
+                ));
+                current_pos = absolute_end + pattern_end.len();
             } else {
-                expected -= 1;
-                counter.update_in(&mut cx, |counter, window, cx| {
-                    counter.decrement(&Decrement, window, cx)
-                });
+                // Malformed chart block, treat as text and break
+                break;
             }
         }
 
-        let actual = counter.read_with(&cx, |counter, _| counter.count);
-        assert_eq!(
-            actual, expected,
-            "Counter should match expected after random ops"
-        );
+        // Add remaining text
+        if current_pos < self.content.len() {
+            blocks.push(Block::Text(self.content[current_pos..].to_string()));
+        }
+
+        // If no blocks were found, it's just one text block
+        if blocks.is_empty() && !self.content.is_empty() {
+            blocks.push(Block::Text(self.content.clone()));
+        }
+
+        blocks
     }
+}
 
-    /// Now, all of those tests are good, but GPUI also provides strong support for testing distributed systems.
-    /// Let's setup a mock network and enhance the counter to send messages over it.
-    mod distributed_systems {
-        use std::sync::{Arc, Mutex};
+impl Default for MarkdownEditor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl Render for MarkdownEditor {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+    }
+}
 
-        /// The state of the mock network.
-        struct MockNetworkState {
-            ordering: Vec<i32>,
-            a_to_b: Vec<i32>,
-            b_to_a: Vec<i32>,
-        }
+#[derive(Clone)]
+pub struct DSLEditor;
+impl DSLEditor {
+    pub fn set_content(&mut self, _content: &str, _cx: &mut impl gpui::AppContext) {}
+}
+impl Render for DSLEditor {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+    }
+}
 
-        /// A mock network that delivers messages between two peers.
-        #[derive(Clone)]
-        struct MockNetwork {
-            state: Arc<Mutex<MockNetworkState>>,
-        }
+#[derive(Clone)]
+pub struct ChartPreview;
+impl Render for ChartPreview {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+    }
+}
 
-        impl MockNetwork {
-            fn new() -> Self {
-                Self {
-                    state: Arc::new(Mutex::new(MockNetworkState {
-                        ordering: Vec::new(),
-                        a_to_b: Vec::new(),
-                        b_to_a: Vec::new(),
-                    })),
-                }
-            }
-
-            fn a_client(&self) -> NetworkClient {
-                NetworkClient {
-                    network: self.clone(),
-                    is_a: true,
-                }
-            }
-
-            fn b_client(&self) -> NetworkClient {
-                NetworkClient {
-                    network: self.clone(),
-                    is_a: false,
-                }
-            }
-        }
-
-        /// A client handle for sending/receiving messages over the mock network.
-        #[derive(Clone)]
-        struct NetworkClient {
-            network: MockNetwork,
-            is_a: bool,
-        }
-
-        // See, networking is easy!
-        impl NetworkClient {
-            fn send(&self, value: i32) {
-                let mut network = self.network.state.lock().unwrap();
-                network.ordering.push(value);
-                if self.is_a {
-                    network.b_to_a.push(value);
-                } else {
-                    network.a_to_b.push(value);
-                }
-            }
-
-            fn receive_all(&self) -> Vec<i32> {
-                let mut network = self.network.state.lock().unwrap();
-                if self.is_a {
-                    network.a_to_b.drain(..).collect()
-                } else {
-                    network.b_to_a.drain(..).collect()
-                }
-            }
-        }
-
-        use gpui::Context;
-
-        /// A networked counter that can send/receive over a mock network.
-        struct NetworkedCounter {
-            count: i32,
-            client: NetworkClient,
-        }
-
-        impl NetworkedCounter {
-            fn new(client: NetworkClient) -> Self {
-                Self { count: 0, client }
-            }
-
-            /// Increment the counter and broadcast the change.
-            fn increment(&mut self, delta: i32, cx: &mut Context<Self>) {
-                self.count += delta;
-
-                cx.background_spawn({
-                    let client = self.client.clone();
-                    async move {
-                        client.send(delta);
-                    }
-                })
-                .detach();
-            }
-
-            /// Process incoming increment requests.
-            fn sync(&mut self) {
-                for delta in self.client.receive_all() {
-                    self.count += delta;
-                }
-            }
-        }
-
-        use super::*;
-
-        /// You can simulate distributed systems with multiple app contexts, simply by adding
-        /// additional parameters.
-        #[gpui::test]
-        fn test_app_sync(cx_a: &mut TestAppContext, cx_b: &mut TestAppContext) {
-            let network = MockNetwork::new();
-
-            let a = cx_a.new(|_| NetworkedCounter::new(network.a_client()));
-            let b = cx_b.new(|_| NetworkedCounter::new(network.b_client()));
-
-            // B increments locally and broadcasts the delta
-            b.update(cx_b, |b, cx| b.increment(42, cx));
-            b.read_with(cx_b, |b, _| assert_eq!(b.count, 42)); // B's count is set immediately
-            a.read_with(cx_a, |a, _| assert_eq!(a.count, 0)); // A's count is in a side effect
-
-            cx_b.run_until_parked(); // Send the delta from B
-            a.update(cx_a, |a, _| a.sync()); // Receive the delta at A
-
-            b.read_with(cx_b, |b, _| assert_eq!(b.count, 42)); // Both counts now match
-            a.read_with(cx_a, |a, _| assert_eq!(a.count, 42));
-        }
-
-        /// Multiple apps can run concurrently, and to capture this each test app shares
-        /// a dispatcher. Whenever you call `run_until_parked`, the dispatcher will randomly
-        /// pick which app's tasks to run next. This allows you to test that your distributed code
-        /// is robust to different execution orderings.
-        #[gpui::test(iterations = 10)]
-        fn test_random_interleaving(
-            cx_a: &mut TestAppContext,
-            cx_b: &mut TestAppContext,
-            mut rng: StdRng,
-        ) {
-            let network = MockNetwork::new();
-
-            // Track execution order
-            let mut original_order = Vec::new();
-            let a = cx_a.new(|_| NetworkedCounter::new(MockNetwork::a_client(&network)));
-            let b = cx_b.new(|_| NetworkedCounter::new(MockNetwork::b_client(&network)));
-
-            let num_operations: usize = rng.random_range(3..8);
-
-            for i in 0..num_operations {
-                let i = i as i32;
-                let which = rng.random_bool(0.5);
-
-                original_order.push(i);
-                if which {
-                    b.update(cx_b, |b, cx| b.increment(i, cx));
-                } else {
-                    a.update(cx_a, |a, cx| a.increment(i, cx));
-                }
-            }
-
-            // This will send all of the pending increment messages, from both a and b
-            cx_a.run_until_parked();
-
-            a.update(cx_a, |a, _| a.sync());
-            b.update(cx_b, |b, _| b.sync());
-
-            let a_count = a.read_with(cx_a, |a, _| a.count);
-            let b_count = b.read_with(cx_b, |b, _| b.count);
-
-            assert_eq!(a_count, b_count, "A and B should have the same count");
-
-            // Nicely format the execution order output.
-            // Run this test with `-- --nocapture` to see it!
-            let actual = network.state.lock().unwrap().ordering.clone();
-            let spawned: Vec<_> = original_order.iter().map(|n| format!("{}", n)).collect();
-            let ran: Vec<_> = actual.iter().map(|n| format!("{}", n)).collect();
-            let diff: Vec<_> = original_order
-                .iter()
-                .zip(actual.iter())
-                .map(|(o, a)| {
-                    if o == a {
-                        " ".to_string()
-                    } else {
-                        "^".to_string()
-                    }
-                })
-                .collect();
-            println!("spawned: [{}]", spawned.join(", "));
-            println!("ran:     [{}]", ran.join(", "));
-            println!("         [{}]", diff.join(", "));
-        }
+#[derive(Clone)]
+pub struct ViewConfig;
+impl ViewConfig {
+    pub fn new() -> Self {
+        Self
+    }
+}
+impl Default for ViewConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl Render for ViewConfig {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        div()
     }
 }

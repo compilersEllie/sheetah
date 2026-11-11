@@ -10,5 +10,6 @@ gpui_platform = { package = "gpui-fast-platform", version = "0.1.0", features = 
 sheetah-model = { workspace = true }
 
 [dev-dependencies]
+gpui = { package = "gpui-fast", version = "0.1.0", features = ["wayland", "test-support"] }
 gpui_platform = { package = "gpui-fast-platform", version = "0.1.0", features = ["wayland", "test-support"] }
 rand = "0.10.3"
