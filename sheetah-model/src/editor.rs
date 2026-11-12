@@ -1,10 +1,14 @@
 use crate::error::Result;
 use crate::{shape::Shape, table::TableId, workspace::Workspace};
+use loro::LoroDoc;
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::Arc;
 use stable_hash::impl_stable_hash;
+use tokio::sync::RwLock;
 use std::{
     fmt::Display,
     ops::{Add, Mul},
-    path::PathBuf,
 };
 
 // Small index type for realworld use.
@@ -73,7 +77,6 @@ impl Display for Index {
 
 // TODO(feat): An editor module with loro documents and hash trees etc. #1
 
-#[derive(Default)]
 pub struct Editor {
     pub workspace: Workspace,
     /// Directory where the workspace is stored.
@@ -81,9 +84,28 @@ pub struct Editor {
 
     pub active_tab: Index,
     pub tabs: Vec<Tab>,
+
+    /// Loro documents for various tables.
+    pub docs: HashMap<TableId, Arc<RwLock<LoroDoc>>>,
+}
+
+impl Default for Editor {
+    fn default() -> Self {
+        Self {
+            workspace: Workspace::default(),
+            workspace_dir: None,
+            active_tab: Index::default(),
+            tabs: Vec::default(),
+            docs: HashMap::default(),
+        }
+    }
 }
 
 impl Editor {
+    pub fn get_or_create_doc(&mut self, id: TableId) -> Arc<RwLock<LoroDoc>> {
+        self.docs.entry(id).or_insert_with(|| Arc::new(RwLock::new(LoroDoc::new()))).clone()
+    }
+
     pub async fn new(workspace_dir: PathBuf) -> Result<Self> {
         let workspace = Workspace::read(&workspace_dir).await?;
         Ok(Self {
