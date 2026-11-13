@@ -81,13 +81,14 @@ impl ValidationManager {
 
         for violation in all_violations {
             let mut error_map = LoroMap::new();
-            error_map.insert("path", violation.path)?;
-            error_map.insert("message", violation.message)?;
-            error_map.insert("code", violation.code)?;
+            error_map.insert("path", violation.path.clone())?;
+            error_map.insert("message", violation.message.clone())?;
+            error_map.insert("code", violation.code.clone())?;
             error_map.insert("level", violation.severity.as_str().to_string())?;
-            error_map.insert("ts", now as i64)?;
+            error_map.insert("ts", now.to_string())?;
             
-            errors_list.insert(errors_list.len(), error_map.into())?;
+            let val: LoroValue = error_map.into();
+            errors_list.insert(errors_list.len(), val)?;
         }
 
         Ok(())

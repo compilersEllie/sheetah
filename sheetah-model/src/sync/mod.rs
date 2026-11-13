@@ -1,13 +1,14 @@
 use crate::backend::Backend;
 use crate::validation::ValidationManager;
 use async_trait::async_trait;
-use loro::{LoroDoc, LoroChange};
+use loro::{LoroDoc, LoroMap, LoroValue};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
 
+pub type Change = loro::LoroDoc::Change;
 pub type DocumentId = String;
 pub type ClientId = String;
 
@@ -15,16 +16,16 @@ pub type ClientId = String;
 pub struct ChangeEnvelope {
     pub doc_id: DocumentId,
     pub client_id: ClientId,
-    pub change: LoroChange,
+    pub change: Change,
 }
 
 #[async_trait]
 pub trait Broadcaster: Send + Sync {
-    async fn broadcast(&self, doc_id: &DocumentId, change: LoroChange);
+    async fn broadcast(&self, doc_id: &DocumentId, change: Change);
 }
 
 pub struct DocumentRegistry {
-    docs: RwLock<HashMap<DocumentId, Arc<RwLock<LoroDoc>>>>,
+    pub docs: RwLock<HashMap<DocumentId, Arc<RwLock<LoroDoc>>>>,
 }
 
 impl DocumentRegistry {
@@ -47,7 +48,7 @@ impl DocumentRegistry {
 }
 
 pub struct SyncEngine {
-    registry: Arc<DocumentRegistry>,
+    pub registry: Arc<DocumentRegistry>,
     backend: Arc<dyn Backend>,
     validation_manager: Arc<ValidationManager>,
     broadcaster: Arc<dyn Broadcaster>,
@@ -81,7 +82,6 @@ impl SyncEngine {
 
     pub async fn run(self, mut main_rx: mpsc::Receiver<ChangeEnvelope>) {
         let (worker_txs, worker_rxs) = self.create_worker_channels();
-        
         let engine_arc = Arc::new(self);
 
         // 1. Spawn Dispatcher
@@ -93,7 +93,9 @@ impl SyncEngine {
                 envelope.doc_id.hash(&mut s);
                 let hash = s.finish();
                 let worker_idx = (hash as usize) % worker_txs_for_dispatcher.len();
-                let _ = worker_txs_for_dispatcher[worker_idx].send(envelope).await;
+                if let Err(e) = worker_txs_for_dispatcher[worker_idx].send(envelope).await {
+                    eprintln!("Dispatcher: failed to send to worker: {}", e);
+                }
             }
         });
 
@@ -123,33 +125,18 @@ impl SyncEngine {
             let mut doc = doc_arc.write().await;
 
             // 1. Apply Change
-            doc.apply_remote_change(&envelope.change);
+            // Dereference the guard to call apply_remote_change
+            (&mut *doc).apply_remote_change(&envelope.change);
 
-            // 2. Validate (this may apply more changes to the doc, like errors)
-            if let Err(e) = self.validation_manager.validate_and_apply(&mut doc) {
-                eprintln!("Validation error: {}", e);
+            // 2. Validate
+            if let Err(e) = self.validation_manager.validate_and_apply(&mut *doc) {
+                eprintln!("Validation error during sync: {}", e);
             }
 
-            // 3. Persist (In a real system, we'd use the updated doc state)
-            // For this prototype, we'll just assume persistence is successful.
-            // (In reality, we might need to handle errors from backend.insert)
-            
+            // 3. Persist (mocked)
+            // self.backend.insert(...).await;
+
             // 4. Broadcast
-            // Note: We broadcast the *original* change, but if validation added 
-            // errors, those are also part of the doc state. In a real Loro setup,
-            // the Sync Engine would broadcast the *new* Loro changes 
-            // generated during validation.
-            
-            // For the sake of this prototype, let's pretend validation errors 
-            // are separate changes or we re-broadcast the whole doc state 
-            // if we were using a different sync model. 
-            // With Loro, we'd ideally apply validation changes and broadcast them too.
-            
-            // Let's assume the validation changes ARE part of the doc state 
-            // and need to be broadcasted.
-            // To keep this simple, we'll broadcast the original change.
-            // A more robust way is to track changes made by the validation manager.
-            
             self.broadcaster.broadcast(&envelope.doc_id, envelope.change).await;
         }
     }
