@@ -1,9 +1,10 @@
 use crate::backend::{Backend, BackendKind, BackendOptions};
-use crate::editor::{Index, Pos, View};
+use crate::editor::View;
 use crate::error::{Result, SheetahError};
 use crate::shape::{Dimension, FieldId, Shape};
+use crate::space::{Index, Pos};
 use crate::table::{Table, TableId};
-use crate::value::{Value, Values, Values2D, Values2DRef, ValueVec, ValueStorage};
+use crate::value::{Value, ValueStorage, Values, Values2D, Values2DRef};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -144,10 +145,7 @@ impl Backend for InMemoryBackend {
             .tables
             .get_mut(&table)
             .ok_or_else(|| SheetahError::TableNotFound(table))?;
-        table_info
-            .shape
-            .rows
-            .add(Some(row_index.raw() as usize), field_id)?;
+        table_info.shape.rows.add(Some(row_index.ind()), field_id)?;
 
         Ok(())
     }
@@ -172,7 +170,7 @@ impl Backend for InMemoryBackend {
         table_info
             .shape
             .columns
-            .add(Some(column_index.raw() as usize), field_id)?;
+            .add(Some(column_index.ind()), field_id)?;
 
         Ok(())
     }
@@ -183,12 +181,13 @@ impl Backend for InMemoryBackend {
         }
 
         let dims = table_info.dims();
-        let num_elements = (dims.column.raw() * dims.row.raw()) as usize;
+        let num_elements = dims.column.ind() * dims.row.ind();
         let mut values = Xar::new();
         for _ in 0..num_elements {
             values.push(ValueStorage::I32(0));
         }
-        let table_data = Values2D::new(dims.column, dims.row, Values::new(table_info.shape, values))?;
+        let table_data =
+            Values2D::new(dims.column, dims.row, Values::new(table_info.shape, values))?;
 
         self.tables.insert(table, table_info);
         self.table_data.insert(table, table_data);
@@ -283,11 +282,7 @@ mod tests {
         for i in 1..=4 {
             values.push(ValueStorage::I32(i as i32));
         }
-        let table_data = Values2D::new(
-            Index::new(2),
-            Index::new(2),
-            values,
-        )?;
+        let table_data = Values2D::new(Index::new(2), Index::new(2), values)?;
         backend.table_data.insert(table_id, table_data);
 
         let view = View {
@@ -336,11 +331,7 @@ mod tests {
         for i in 1..=4 {
             values.push(ValueStorage::I32(i as i32));
         }
-        let table_data = Values2D::new(
-            Index::new(2),
-            Index::new(2),
-            values,
-        )?;
+        let table_data = Values2D::new(Index::new(2), Index::new(2), values)?;
         backend.table_data.insert(table_id, table_data);
 
         let mut new_vals = Xar::new();
@@ -382,7 +373,6 @@ mod tests {
         assert_eq!(updated_data.rows(), Index::new(2));
         Ok(())
     }
-
 
     #[tokio::test]
     async fn test_get_direct() -> Result<()> {

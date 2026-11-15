@@ -1,9 +1,11 @@
-use crate::editor::{Index, Pos};
 use crate::error::{Result, SheetahError};
 use crate::optic::OpticId;
+use crate::space::BASE_DIMS_SIZE;
+use crate::space::{Index, Pos};
 use serde::{Deserialize, Serialize};
+use smallvec::SmallVec;
 use smol_str::SmolStr;
-use stable_hash::{impl_stable_hash, StableHash, StableHasher};
+use stable_hash::{StableHash, StableHasher, impl_stable_hash};
 use std::any::{Any, TypeId};
 use std::fmt::Debug;
 use xar::Xar;
@@ -36,7 +38,7 @@ impl StableHash for &dyn Value {
 }
 
 #[repr(align(32))]
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum ValueStorage {
     None,
     I8(i8),
@@ -48,6 +50,7 @@ pub enum ValueStorage {
     F64(f64),
     Str(SmolStr),
     Other(Box<dyn Value>),
+    // TODO(perf): Support smallvec?. #3
 }
 
 pub type ValueVec = Xar<ValueStorage>;
@@ -65,6 +68,48 @@ impl Clone for ValueStorage {
             Self::F64(v) => Self::F64(*v),
             Self::Str(v) => Self::Str(v.clone()),
             Self::Other(v) => Self::Other(v.cloned()),
+        }
+    }
+}
+
+impl PartialEq for ValueStorage {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::I8(l0), Self::I8(r0)) => l0 == r0,
+            (Self::I16(l0), Self::I16(r0)) => l0 == r0,
+            (Self::I32(l0), Self::I32(r0)) => l0 == r0,
+            (Self::I64(l0), Self::I64(r0)) => l0 == r0,
+            (Self::I128(l0), Self::I128(r0)) => l0 == r0,
+            (Self::F32(l0), Self::F32(r0)) => l0 == r0,
+            (Self::F64(l0), Self::F64(r0)) => l0 == r0,
+            (Self::Str(l0), Self::Str(r0)) => l0 == r0,
+            _ => false, // TODO(feat): Support more types of equality. #4
+        }
+    }
+}
+
+impl PartialOrd for ValueStorage {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match (self, other) {
+            (Self::Other(s), Self::Other(o)) => None, // TODO(feat): Support more types of comparison. #4
+            (Self::Other(s), o) => None, // TODO(feat): Support more types of comparison. #4
+            (s, Self::Other(o)) => None, // TODO(feat): Support more types of comparison. #4
+            (Self::None, Self::None) => Some(std::cmp::Ordering::Equal),
+            (Self::None, _) => Some(std::cmp::Ordering::Less),
+            (_, Self::None) => Some(std::cmp::Ordering::Greater),
+            (Self::I8(v), Self::I8(o)) => v.partial_cmp(o),
+
+            (Self::I16(v), Self::I16(o)) => v.partial_cmp(o),
+
+            (Self::I32(v), Self::I32(o)) => v.partial_cmp(o),
+
+            (Self::I64(v), Self::I64(o)) => v.partial_cmp(o),
+            (Self::I128(v), Self::I128(o)) => v.partial_cmp(o),
+
+            (Self::F32(v), Self::F32(o)) => v.partial_cmp(o),
+            (Self::F64(v), Self::F64(o)) => v.partial_cmp(o),
+            (Self::Str(v), Self::Str(o)) => v.partial_cmp(o),
+            _ => None, // TODO(feat): Support more types of comparison. #4
         }
     }
 }
@@ -120,57 +165,103 @@ impl Value for ValueStorage {
 
 #[typetag::serde]
 impl Value for i8 {
-    fn name(&self) -> String { "integer (i8)".to_string() }
-    fn cloned(&self) -> Box<dyn Value> { Box::new(*self) }
-    fn bytes(&self) -> Vec<u8> { [b'i', 8].into_iter().chain(self.to_be_bytes()).collect() }
+    fn name(&self) -> String {
+        "integer (i8)".to_string()
+    }
+    fn cloned(&self) -> Box<dyn Value> {
+        Box::new(*self)
+    }
+    fn bytes(&self) -> Vec<u8> {
+        [b'i', 8].into_iter().chain(self.to_be_bytes()).collect()
+    }
 }
 
 #[typetag::serde]
 impl Value for i16 {
-    fn name(&self) -> String { "integer (i16)".to_string() }
-    fn cloned(&self) -> Box<dyn Value> { Box::new(*self) }
-    fn bytes(&self) -> Vec<u8> { [b'i', 16].into_iter().chain(self.to_be_bytes()).collect() }
+    fn name(&self) -> String {
+        "integer (i16)".to_string()
+    }
+    fn cloned(&self) -> Box<dyn Value> {
+        Box::new(*self)
+    }
+    fn bytes(&self) -> Vec<u8> {
+        [b'i', 16].into_iter().chain(self.to_be_bytes()).collect()
+    }
 }
 
 #[typetag::serde]
 impl Value for i32 {
-    fn name(&self) -> String { "integer (i32)".to_string() }
-    fn cloned(&self) -> Box<dyn Value> { Box::new(*self) }
-    fn bytes(&self) -> Vec<u8> { [b'i', 32].into_iter().chain(self.to_be_bytes()).collect() }
+    fn name(&self) -> String {
+        "integer (i32)".to_string()
+    }
+    fn cloned(&self) -> Box<dyn Value> {
+        Box::new(*self)
+    }
+    fn bytes(&self) -> Vec<u8> {
+        [b'i', 32].into_iter().chain(self.to_be_bytes()).collect()
+    }
 }
 
 #[typetag::serde]
 impl Value for i64 {
-    fn name(&self) -> String { "integer (i64)".to_string() }
-    fn cloned(&self) -> Box<dyn Value> { Box::new(*self) }
-    fn bytes(&self) -> Vec<u8> { [b'i', 64].into_iter().chain(self.to_be_bytes()).collect() }
+    fn name(&self) -> String {
+        "integer (i64)".to_string()
+    }
+    fn cloned(&self) -> Box<dyn Value> {
+        Box::new(*self)
+    }
+    fn bytes(&self) -> Vec<u8> {
+        [b'i', 64].into_iter().chain(self.to_be_bytes()).collect()
+    }
 }
 
 #[typetag::serde]
 impl Value for i128 {
-    fn name(&self) -> String { "integer (i128)".to_string() }
-    fn cloned(&self) -> Box<dyn Value> { Box::new(*self) }
-    fn bytes(&self) -> Vec<u8> { [b'i', 128].into_iter().chain(self.to_be_bytes()).collect() }
+    fn name(&self) -> String {
+        "integer (i128)".to_string()
+    }
+    fn cloned(&self) -> Box<dyn Value> {
+        Box::new(*self)
+    }
+    fn bytes(&self) -> Vec<u8> {
+        [b'i', 128].into_iter().chain(self.to_be_bytes()).collect()
+    }
 }
 
 #[typetag::serde]
 impl Value for f32 {
-    fn name(&self) -> String { "decimal (f32)".to_string() }
-    fn cloned(&self) -> Box<dyn Value> { Box::new(*self) }
-    fn bytes(&self) -> Vec<u8> { [b'f', 32].into_iter().chain(self.to_be_bytes()).collect() }
+    fn name(&self) -> String {
+        "decimal (f32)".to_string()
+    }
+    fn cloned(&self) -> Box<dyn Value> {
+        Box::new(*self)
+    }
+    fn bytes(&self) -> Vec<u8> {
+        [b'f', 32].into_iter().chain(self.to_be_bytes()).collect()
+    }
 }
 
 #[typetag::serde]
 impl Value for f64 {
-    fn name(&self) -> String { "decimal (f64)".to_string() }
-    fn cloned(&self) -> Box<dyn Value> { Box::new(*self) }
-    fn bytes(&self) -> Vec<u8> { [b'f', 64].into_iter().chain(self.to_be_bytes()).collect() }
+    fn name(&self) -> String {
+        "decimal (f64)".to_string()
+    }
+    fn cloned(&self) -> Box<dyn Value> {
+        Box::new(*self)
+    }
+    fn bytes(&self) -> Vec<u8> {
+        [b'f', 64].into_iter().chain(self.to_be_bytes()).collect()
+    }
 }
 
 #[typetag::serde]
 impl Value for String {
-    fn name(&self) -> String { "text".to_string() }
-    fn cloned(&self) -> Box<dyn Value> { Box::new(self.clone()) }
+    fn name(&self) -> String {
+        "text".to_string()
+    }
+    fn cloned(&self) -> Box<dyn Value> {
+        Box::new(self.clone())
+    }
     fn bytes(&self) -> Vec<u8> {
         let mut bytes = vec![b's'];
         bytes.extend_from_slice(&self.len().to_be_bytes());
@@ -181,9 +272,15 @@ impl Value for String {
 
 #[typetag::serde]
 impl Value for Box<dyn Value> {
-    fn name(&self) -> String { (**self).name() }
-    fn cloned(&self) -> Box<dyn Value> { (**self).cloned() }
-    fn bytes(&self) -> Vec<u8> { (**self).bytes() }
+    fn name(&self) -> String {
+        (**self).name()
+    }
+    fn cloned(&self) -> Box<dyn Value> {
+        (**self).cloned()
+    }
+    fn bytes(&self) -> Vec<u8> {
+        (**self).bytes()
+    }
 }
 
 #[typetag::serde]
@@ -259,95 +356,53 @@ impl ValueInfo {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct Values {
-    data: Xar<ValueStorage>,
-    shape: Vec<Index>,
-    strides: Vec<usize>,
+    data: Xar<ValueStorage>, // TODO(perf): Support smallvec?. #3
+    shape: SmallVec<[Index; BASE_DIMS_SIZE]>,
+    strides: SmallVec<[usize; BASE_DIMS_SIZE]>, // TODO(perf): Shrink data size. #3
 }
 
-impl Serialize for Values {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("Values", 3)?;
-        let data_vec: Vec<ValueStorage> = self.data.iter().cloned().collect();
-        state.serialize_field("data", &data_vec)?;
-        state.serialize_field("shape", &self.shape)?;
-        state.serialize_field("strides", &self.strides)?;
-        state.end()
+impl std::ops::IndexMut<Index> for Values {
+    fn index_mut(&mut self, index: Index) -> &mut Self::Output {
+        &mut self.data[index.ind()]
     }
 }
 
-impl<'de> Deserialize<'de> for Values {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        use serde::de::{self, MapAccess, Visitor};
-        use std::fmt;
+impl std::ops::Index<Index> for Values {
+    type Output = ValueStorage;
 
-        struct ValuesVisitor;
+    fn index(&self, index: Index) -> &Self::Output {
+        &self.data[index.ind()]
+    }
+}
 
-        impl<'de> Visitor<'de> for ValuesVisitor {
-            type Value = Values;
+impl IntoIterator for Values {
+    type Item = <Xar<ValueStorage> as IntoIterator>::Item;
 
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("struct Values")
-            }
+    type IntoIter = <Xar<ValueStorage> as IntoIterator>::IntoIter;
 
-            fn visit_map<V>(self, mut map: V) -> Result<Values, V::Error>
-            where
-                V: MapAccess<'de>,
-            {
-                let mut data = None;
-                let mut shape = None;
-                let mut strides = None;
-
-                while let Some(key) = map.next_key::<SmolStr>()? {
-                    match key.as_str() {
-                        "data" => {
-                            let vec: Vec<ValueStorage> = map.next_value()?;
-                            data = Some(Xar::from(vec));
-                        }
-                        "shape" => {
-                            shape = Some(map.next_value()?);
-                        }
-                        "strides" => {
-                            strides = Some(map.next_value()?);
-                        }
-                        _ => {
-                            let _: serde::de::IgnoredAny = map.next_value()?;
-                        }
-                    }
-                }
-
-                let data = data.ok_or_else(|| de::Error::missing_field("data"))?;
-                let shape = shape.ok_or_else(|| de::Error::missing_field("shape"))?;
-                let strides = strides.ok_or_else(|| de::Error::missing_field("strides"))?;
-
-                Ok(Values { data, shape, strides })
-            }
-        }
-
-        deserializer.deserialize_struct("Values", &["data", "shape", "strides"], ValuesVisitor)
+    fn into_iter(self) -> Self::IntoIter {
+        self.data.into_iter()
     }
 }
 
 impl Values {
     // TODO(perf): Don't use a vec here or we lose the benefits of Xar #1
     pub fn new(shape: Vec<Index>, data: Vec<ValueStorage>) -> Result<Self> {
-        let len: usize = shape.iter().map(|i| i.raw() as usize).product();
+        let len: usize = shape.iter().map(|i| i.ind()).product();
         if len != data.len() {
             // TODO(error): Specialise the errors a little better. #2
-            return Err(SheetahError::InternalError(format!("Dimension mismatch: shape product {} != data length {}", len, data.len())));
+            return Err(SheetahError::InternalError(format!(
+                "Dimension mismatch: shape product {} != data length {}",
+                len,
+                data.len()
+            )));
         }
 
         let mut strides = vec![1; shape.len()];
         for i in (0..shape.len().saturating_sub(1)).rev() {
-            strides[i] = strides[i + 1] * shape[i + 1].raw() as usize;
+            strides[i] = strides[i + 1] * shape[i + 1].ind();
         }
 
         Ok(Self {
@@ -363,26 +418,29 @@ impl Values {
             if i >= self.shape.len() || idx.raw() >= self.shape[i].raw() {
                 return Err(SheetahError::InvalidIndex(idx, self.shape[i]));
             }
-            offset += idx.raw() as usize * self.strides[i];
+            offset += idx.ind() * self.strides[i];
         }
         let Some(value) = &self.data.get(offset) else {
-            return Err(SheetahError::InternalError(format!("Index out of bounds: {:?} for {:?}", indicies, self.shape)));
+            return Err(SheetahError::InternalError(format!(
+                "Index out of bounds: {:?} for {:?}",
+                indicies, self.shape
+            )));
         };
         Ok(value)
     }
 
-    pub fn set(&mut self, indices: &[Index], value: ValueStorage) -> Result<()> {
+    pub fn set(&mut self, indicies: &[Index], value: ValueStorage) -> Result<()> {
         let mut offset = 0;
-        for (i, &idx) in indices.iter().enumerate() {
+        for (i, &idx) in indicies.iter().enumerate() {
             if i >= self.shape.len() || idx.raw() >= self.shape[i].raw() {
                 return Err(SheetahError::InternalError(format!("Index out of bounds")));
             }
-            offset += idx.raw() as usize * self.strides[i];
+            offset += idx.ind() * self.strides[i];
         }
         if let Some(val) = self.data.get_mut(offset) {
             *val = value;
         } else {
-            bail!("Index out of bounds");
+            return Err(SheetahError::InvalidPosition(indicies, self.shape));
         }
         Ok(())
     }
@@ -472,7 +530,8 @@ impl<'de> Deserialize<'de> for Values2D {
 }
 
 impl Values2D {
-    pub fn new(columns: Index, rows: Index, values: Values) -> Result<Self> {
+    pub fn new<V: Into<Values>>(columns: Index, rows: Index, vals: V) -> Result<Self> {
+        let values: Values = vals.into();
         if ((columns * rows) as usize) != values.len() {
             return Err(SheetahError::InternalError(format!(
                 "Dimensions of values do not match: {} x {} != {}",
@@ -486,25 +545,25 @@ impl Values2D {
 
     #[inline]
     pub fn get(&self, column: Index, row: Index) -> Result<ValueStorage> {
-        let ind = self.index(column, row)?.raw() as usize;
+        let ind = self.index(column, row)?;
         Ok(self.values[ind].clone())
     }
 
     #[inline]
     pub fn get_ref(&self, column: Index, row: Index) -> Result<&ValueStorage> {
-        let ind = self.index(column, row)?.raw() as usize;
+        let ind = self.index(column, row)?;
         Ok(&self.values[ind])
     }
 
     #[inline]
     pub fn set(&mut self, column: Index, row: Index, value: ValueStorage) -> Result<()> {
-        let ind = self.index(column, row)?.raw() as usize;
+        let ind = self.index(column, row)?;
         self.values[ind] = value;
         Ok(())
     }
 
     pub fn add_row(&mut self, row_index: Index, values: Values) -> Result<()> {
-        let cols = self.columns().raw() as usize;
+        let cols = self.columns().ind();
         if values.len() != cols {
             return Err(SheetahError::InternalError(format!(
                 "Wrong number of values: Got {} expected {}",
@@ -512,8 +571,8 @@ impl Values2D {
                 cols
             )));
         }
-        let target_row = row_index.raw() as usize;
-        let old_rows = self.rows().raw() as usize;
+        let target_row = row_index.ind();
+        let old_rows = self.rows().ind();
         if target_row > old_rows {
             return Err(SheetahError::InternalError(format!(
                 "Row index {} out of range 0..{}",
@@ -542,8 +601,8 @@ impl Values2D {
     }
 
     pub fn add_column(&mut self, column_index: Index, values: Values) -> Result<()> {
-        let rows = self.rows().raw() as usize;
-        let cols = self.columns().raw() as usize;
+        let rows = self.rows().ind();
+        let cols = self.columns().ind();
         if values.len() != rows {
             return Err(SheetahError::InternalError(format!(
                 "Wrong number of values: Got {} expected {}",
@@ -551,7 +610,7 @@ impl Values2D {
                 rows
             )));
         }
-        let target_col = column_index.raw() as usize;
+        let target_col = column_index.ind();
         if target_col > cols {
             return Err(SheetahError::InternalError(format!(
                 "Column index {} out of range 0..{}",
@@ -580,7 +639,7 @@ impl Values2D {
 
     #[inline]
     pub fn pos(&self, index: Index) -> Result<Pos> {
-        if index.raw() as usize >= self.len() {
+        if index.ind() >= self.len() {
             return Err(SheetahError::InternalError(format!(
                 "Index {} out of range 0..{}",
                 index,
@@ -663,7 +722,7 @@ impl<'a> Values2DRef<'a> {
 
     #[inline]
     pub fn get(&self, column: Index, row: Index) -> &ValueStorage {
-        let ind = self.index(column, row).raw() as usize;
+        let ind = self.index(column, row).ind();
         self.values[ind]
     }
 

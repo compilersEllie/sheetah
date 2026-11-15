@@ -1,9 +1,13 @@
+use std::fmt::Display;
+
 use crate::error::Result;
+use crate::space::BASE_DIMS_SIZE;
 use crate::{
-    editor::{Index, Pos},
     error::SheetahError,
+    space::{Index, Pos},
     value::ValueInfo,
 };
+use smallvec::SmallVec;
 use stable_hash::{FieldAddress, StableHash, StableHasher, impl_stable_hash};
 
 pub type FieldId = u32;
@@ -29,15 +33,17 @@ impl StableHash for SortOrder {
 #[derive(Default, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Shape {
     fields: Vec<FieldInfo>,
-    pub columns: Dimension,
-    pub rows: Dimension,
+    pub dims: SmallVec<[Dimension; BASE_DIMS_SIZE]>,
 }
 
-impl_stable_hash!(Shape {
-    fields,
-    columns,
-    rows
-});
+impl StableHash for Shape {
+    fn stable_hash<H: StableHasher>(&self, field_address: H::Addr, state: &mut H) {
+        self.fields.stable_hash(field_address.child(0), state);
+        for i in 0..self.dims.len() {
+            self.dims[i].stable_hash(field_address.child(1).child(i as u64), state);
+        }
+    }
+}
 
 impl Shape {
     #[inline]
@@ -48,8 +54,7 @@ impl Shape {
     #[inline]
     pub fn dims(&self) -> Pos {
         Pos {
-            column: self.columns.len(),
-            row: self.rows.len(),
+            dims: self.dims.iter().map(|vals| vals.len()).collect(),
         }
     }
 
@@ -58,6 +63,22 @@ impl Shape {
         Ok(())
     }
     // TODO(feat): Calculate the remainder, fields and their types, after taking out columns and rows, for each cell. #2
+}
+
+impl Display for Shape {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "(")?;
+        let mut first = true;
+        for dim in &self.dims {
+            if first {
+                first = false;
+            } else {
+                write!(f, "x");
+            }
+            write!(f, "{}", dim.len());
+        }
+        write!(f, ")")
+    }
 }
 
 #[derive(Default, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]

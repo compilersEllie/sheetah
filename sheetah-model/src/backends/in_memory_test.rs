@@ -6,10 +6,10 @@ mod tests {
     use crate::error::Result;
     use crate::shape::{Dimension, Shape};
     use crate::table::{Table, TableId};
-    use crate::value::{Values, Values2D, ValueStorage, Value, ValueVec};
-    use xar::Xar;
+    use crate::value::{Value, ValueStorage, ValueVec, Values, Values2D};
     use std::collections::HashMap;
     use std::path::PathBuf;
+    use xar::Xar;
 
     #[tokio::test]
     async fn test_backend_new() -> Result<()> {

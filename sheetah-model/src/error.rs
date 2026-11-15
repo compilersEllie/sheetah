@@ -1,4 +1,5 @@
-use crate::editor::Index;
+use crate::shape::Shape;
+use crate::space::{Index, Pos};
 use crate::table::{TableId, TableName};
 use thiserror::Error;
 
@@ -14,7 +15,10 @@ pub enum SheetahError {
     DimensionMismatch { expected: Index, found: Index },
 
     #[error("Invalid index: {0:?}")]
-    InvalidIndex(Index),
+    InvalidIndex(Index, Index),
+
+    #[error("Invalid position for shape: found {found} inside found {shape}")]
+    InvalidPositionForShape { found: Pos, shape: Shape },
 
     #[error("Backend error: Backend kind {0} not found")]
     NoBackendKindError(String),

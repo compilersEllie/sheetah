@@ -1,6 +1,7 @@
-use crate::editor::{Index, Pos, View};
+use crate::editor::View;
 use crate::error::Result;
 use crate::shape::FieldId;
+use crate::space::{Index, Pos};
 use crate::table::{Table, TableId};
 use crate::value::{Values, Values2D, Values2DRef};
 use async_trait::async_trait;

@@ -2,6 +2,8 @@ pub mod backend;
 pub mod backends;
 pub mod editor;
 pub mod error;
+pub mod space;
+pub mod space_2d;
 
 #[cfg(test)]
 mod editor_test;
@@ -23,8 +25,5 @@ pub mod value;
 
 #[cfg(test)]
 mod value_test;
-
-#[cfg(test)]
-mod value_test_api;
 
 pub mod workspace;
