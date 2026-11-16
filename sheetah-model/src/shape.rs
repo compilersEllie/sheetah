@@ -1,10 +1,10 @@
 use std::fmt::Display;
 
 use crate::error::Result;
-use crate::space::BASE_DIMS_SIZE;
+use crate::indexing::multi::BASE_DIMS_SIZE;
 use crate::{
     error::SheetahError,
-    space::{Index, Pos},
+    indexing::{Index, Pos},
     value::ValueInfo,
 };
 use smallvec::SmallVec;

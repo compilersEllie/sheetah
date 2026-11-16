@@ -1,11 +1,13 @@
-use smallvec::SmallVec;
+pub mod multi;
+pub mod planar;
+
 use stable_hash::impl_stable_hash;
 use std::{
     fmt::Display,
     ops::{Add, AddAssign, Mul},
 };
-
-pub(crate) const BASE_DIMS_SIZE: usize = 2;
+pub use multi::Pos;
+pub use planar::Pos2D;
 
 // Small index type for realworld use.
 #[derive(
@@ -98,40 +100,5 @@ impl From<Index> for u32 {
 impl Display for Index {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.raw())
-    }
-}
-
-// TODO(feat): An editor module with loro documents and hash trees etc. #1
-
-#[derive(
-    Clone,
-    Debug,
-    Default,
-    Eq,
-    PartialEq,
-    Ord,
-    PartialOrd,
-    Hash,
-    serde::Serialize,
-    serde::Deserialize,
-)]
-pub struct Pos {
-    // TODO(mem): Check the num size is large enough and as small as possible. #4
-    pub dims: SmallVec<[Index; BASE_DIMS_SIZE]>,
-}
-
-impl Display for Pos {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "(")?;
-        let mut first = true;
-        for dim in &self.dims {
-            if first {
-                first = false;
-            } else {
-                write!(f, ", ")?;
-            }
-            write!(f, "{}", dim)?;
-        }
-        write!(f, ")")
     }
 }

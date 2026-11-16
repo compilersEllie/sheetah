@@ -1,7 +1,7 @@
 use crate::error::{Result, SheetahError};
 use crate::optic::OpticId;
-use crate::space::BASE_DIMS_SIZE;
-use crate::space::{Index, Pos};
+use crate::indexing::multi::BASE_DIMS_SIZE;
+use crate::indexing::{Index, Pos};
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 use smol_str::SmolStr;

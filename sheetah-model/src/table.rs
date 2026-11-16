@@ -1,5 +1,5 @@
 use crate::shape::Shape;
-use crate::{optic::OpticId, space::Pos};
+use crate::{optic::OpticId, indexing::multi::Pos};
 use byteorder::{BigEndian, ByteOrder};
 use stable_hash::{StableHash, StableHasher, crypto::CryptoStableHasher, impl_stable_hash};
 use std::collections::HashMap;

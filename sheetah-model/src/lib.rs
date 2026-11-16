@@ -1,18 +1,19 @@
 pub mod backend;
 pub mod backends;
-pub mod editor;
-pub mod error;
-pub mod space;
-pub mod space_2d;
 
+pub mod editor;
 #[cfg(test)]
 mod editor_test;
+
+pub mod error;
+pub mod indexing;
 
 pub mod optic;
 
 #[cfg(test)]
 mod optic_test;
 pub mod optics;
+
 pub mod shape;
 
 #[cfg(test)]
@@ -25,5 +26,4 @@ pub mod value;
 
 #[cfg(test)]
 mod value_test;
-
 pub mod workspace;

@@ -1,5 +1,5 @@
 use crate::shape::Shape;
-use crate::space::{Index, Pos};
+use crate::indexing::{Index, Pos};
 use crate::table::{TableId, TableName};
 use thiserror::Error;
 

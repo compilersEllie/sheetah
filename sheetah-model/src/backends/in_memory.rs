@@ -2,7 +2,7 @@ use crate::backend::{Backend, BackendKind, BackendOptions};
 use crate::editor::View;
 use crate::error::{Result, SheetahError};
 use crate::shape::{Dimension, FieldId, Shape};
-use crate::space::{Index, Pos};
+use crate::indexing::{Index, Pos};
 use crate::table::{Table, TableId};
 use crate::value::{Value, ValueStorage, Values, Values2D, Values2DRef};
 use async_trait::async_trait;
@@ -175,7 +175,7 @@ impl Backend for InMemoryBackend {
         Ok(())
     }
 
-    async fn insert_table(&mut self, table: TableId, table_info: Table) -> Result<()> {
+    async fn insert(&mut self, table: TableId, table_info: Table) -> Result<()> {
         if self.tables.contains_key(&table) {
             return Err(SheetahError::DuplicateTable(None));
         }
