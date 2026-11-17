@@ -1,11 +1,11 @@
+use crate::indexing::Index;
+use crate::indexing::Pos;
 use smallvec::SmallVec;
 use stable_hash::impl_stable_hash;
 use std::{
     fmt::Display,
     ops::{Add, AddAssign, Mul},
 };
-use crate::indexing::Index;
-use crate::indexing::Pos;
 
 #[derive(
     Copy,
@@ -27,8 +27,7 @@ pub struct Pos2D {
 
 impl_stable_hash!(Pos2D { row, column });
 
-impl Add<Pos2D> for Pos2D
-{
+impl Add<Pos2D> for Pos2D {
     type Output = Pos2D;
     #[inline]
     fn add(self, other: Pos2D) -> Self::Output {
@@ -48,27 +47,24 @@ impl AddAssign<Pos2D> for Pos2D {
 }
 
 impl TryFrom<Pos> for Pos2D {
+    type Error = ();
+
     #[inline]
-    fn try_from(val: Pos) -> Option<Pos2D> {
+    fn try_from(val: Pos) -> Result<Pos2D, ()> {
         if val.dims.len() == 2 {
-          Some(Pos2D {
-            row: val.dims[0],
-            column: val.dims[1],
-          })
+            Ok(Pos2D {
+                row: val.dims[0],
+                column: val.dims[1],
+            })
         } else {
-          None
+            Err(())
         }
     }
 }
 
 impl std::fmt::Display for Pos2D {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "({r}, {c})",
-            r = self.row,
-            c = self.column,
-        )
+        write!(f, "({r}, {c})", r = self.row, c = self.column,)
     }
 }
 
@@ -79,11 +75,21 @@ pub struct Rect {
 }
 
 impl Rect {
-    pub fn dims(&self) -> Pos2D {
-        Pos2D {
-            column: self.columns,
-            row: self.rows,
-        }
+    #[inline(always)]
+    pub fn end(&self) -> Pos2D {
+        self.start + self.size
+    }
+
+    pub fn rows(&self) -> impl Iterator<Item = Index> {
+        let start = self.start.row.raw();
+        let end = self.end().row.raw();
+        (start..end).into_iter().map(|i| Index::new(i))
+    }
+
+    pub fn columns(&self) -> impl Iterator<Item = Index> {
+        let start = self.start.column.raw();
+        let end = self.end().column.raw();
+        (start..end).into_iter().map(|i| Index::new(i))
     }
 }
 
@@ -93,7 +99,7 @@ impl std::fmt::Display for Rect {
             f,
             "[{s}..{e} {d}]",
             s = self.start.row,
-            e = self.start+self.size,
+            e = self.start + self.size,
             d = self.size,
         )
     }

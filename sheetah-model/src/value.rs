@@ -2,7 +2,7 @@ use crate::error::{Result, SheetahError};
 use crate::optic::OpticId;
 use crate::indexing::multi::BASE_DIMS_SIZE;
 use crate::indexing::{Index, Pos};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use smallvec::SmallVec;
 use smol_str::SmolStr;
 use stable_hash::{StableHash, StableHasher, impl_stable_hash};
@@ -466,7 +466,7 @@ pub struct Values2D {
 }
 
 impl Serialize for Values2D {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<<S as Serializer>::Ok, <S as Serializer>::Error>
     where
         S: serde::Serializer,
     {
@@ -480,7 +480,7 @@ impl Serialize for Values2D {
 }
 
 impl<'de> Deserialize<'de> for Values2D {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
@@ -496,7 +496,7 @@ impl<'de> Deserialize<'de> for Values2D {
                 formatter.write_str("struct Values2D")
             }
 
-            fn visit_map<V>(self, mut map: V) -> Result<Values2D, V::Error>
+            fn visit_map<V>(self, mut map: V) -> std::result::Result<Values2D, V::Error>
             where
                 V: MapAccess<'de>,
             {
@@ -708,12 +708,12 @@ pub struct Values2DRef<'a> {
 }
 
 impl<'a> Values2DRef<'a> {
-    pub fn new(columns: Index, rows: Index, values: Vec<&'a ValueStorage>) -> Result<Self> {
+    pub fn new(rows: Index, columns: Index, values: Vec<&'a ValueStorage>) -> Result<Self> {
         if ((columns * rows) as usize) != values.len() {
             return Err(SheetahError::InternalError(format!(
                 "Dimensions of values do not match: {} x {} != {}",
-                columns,
                 rows,
+                columns,
                 values.len()
             )));
         }
@@ -721,8 +721,8 @@ impl<'a> Values2DRef<'a> {
     }
 
     #[inline]
-    pub fn get(&self, column: Index, row: Index) -> &ValueStorage {
-        let ind = self.index(column, row).ind();
+    pub fn get(&self, row: Index, column: Index) -> &ValueStorage {
+        let ind = self.index(row, column).ind();
         self.values[ind]
     }
 
@@ -730,13 +730,13 @@ impl<'a> Values2DRef<'a> {
     pub fn pos(&self, index: Index) -> Pos {
         // TODO(perf): Avoid divide methods
         Pos {
-            column: (index.raw() % self.columns.raw()).into(),
             row: (index.raw() / self.columns.raw()).into(),
+            column: (index.raw() % self.columns.raw()).into(),
         }
     }
 
     #[inline]
-    pub fn index(&self, column: Index, row: Index) -> Index {
+    pub fn index(&self, row:Index, column: Index) -> Index {
         Index::new(row * self.columns) + column
     }
 

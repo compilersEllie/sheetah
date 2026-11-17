@@ -1,7 +1,7 @@
 use crate::editor::View;
 use crate::error::Result;
 use crate::shape::FieldId;
-use crate::indexing::{Index, Pos};
+use crate::indexing::{Index, Pos2D};
 use crate::table::{Table, TableId};
 use crate::value::{Values, Values2D, Values2DRef};
 use async_trait::async_trait;
@@ -44,7 +44,7 @@ pub trait Backend: Debug + Send + Sync {
     async fn set_data<'a, 'b>(
         &'a mut self,
         table: TableId,
-        pos: &Pos,
+        pos: &Pos2D,
         data: Values2D,
     ) -> Result<()>;
     async fn add_row<'a>(

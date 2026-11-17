@@ -2,7 +2,7 @@ use crate::backend::{Backend, BackendKind, BackendOptions};
 use crate::editor::View;
 use crate::error::{Result, SheetahError};
 use crate::shape::{Dimension, FieldId, Shape};
-use crate::indexing::{Index, Pos};
+use crate::indexing::{Index, Pos, Pos2D};
 use crate::table::{Table, TableId};
 use crate::value::{Value, ValueStorage, Values, Values2D, Values2DRef};
 use async_trait::async_trait;
@@ -80,21 +80,19 @@ impl Backend for InMemoryBackend {
             SheetahError::BackendError(format!("Could not get table data for table {:?}", table))
         })?;
 
-        let mut values = Vec::with_capacity((window.rows * window.columns) as usize);
-        let start_row = window.start.row.raw();
-        let start_col = window.start.column.raw();
-        for row in start_row..start_row + window.rows.raw() {
-            for col in start_col..start_col + window.columns.raw() {
-                values.push(table_data.get_ref(Index::new(col), Index::new(row))?);
+        let mut values = Vec::with_capacity(window.start.row.ind() * window.start.column.ind());
+        for row in window.rows() {
+            for col in window.columns() {
+                values.push(table_data.get_ref(col, row)?);
             }
         }
-        Ok(Values2DRef::new(window.columns, window.rows, values)?)
+        Ok(Values2DRef::new(window.size.row, window.size.column, values)?)
     }
 
     async fn set_data<'a, 'b>(
         &'a mut self,
         table: TableId,
-        pos: &Pos,
+        pos: &Pos2D,
         data: Values2D,
     ) -> Result<()> {
         let table_info = self.get(&table).await?;
@@ -212,7 +210,7 @@ impl Backend for InMemoryBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::editor::Rect;
+    use crate::{editor::Rect, indexing::Pos2D};
     use std::path::PathBuf;
 
     fn setup_backend() -> InMemoryBackend {
@@ -287,7 +285,7 @@ mod tests {
 
         let view = View {
             table: table_id,
-            cursor: Pos {
+            cursor: Pos2D {
                 column: Index::new(0),
                 row: Index::new(0),
             },
