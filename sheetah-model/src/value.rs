@@ -313,7 +313,7 @@ impl Value for Option<Box<dyn Value>> {
 // TODO: Add url? or parse #3
 // TODO: Add matricies #3
 
-#[derive(Default, Clone, Debug, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct ValueInfo {
     name: String,
     type_id_hash: u128, // TypeId (but can be stablehashed etc.)
@@ -356,8 +356,9 @@ impl ValueInfo {
     }
 }
 
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Values {
+    // TODO(feat): Make generic over type T in place of ValueStorage. #2
     data: Xar<ValueStorage>, // TODO(perf): Support smallvec?. #3
     shape: SmallVec<[Index; BASE_DIMS_SIZE]>,
     strides: SmallVec<[usize; BASE_DIMS_SIZE]>, // TODO(perf): Shrink data size. #3
@@ -458,75 +459,11 @@ impl Values {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Values2D {
     // TODO(cleanup): Remove this datatype entirely.
     pub values: Values,
     pub columns: Index,
-}
-
-impl Serialize for Values2D {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<<S as Serializer>::Ok, <S as Serializer>::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("Values2D", 2)?;
-        let values_vec: Vec<ValueStorage> = self.values.iter().cloned().collect();
-        state.serialize_field("values", &values_vec)?;
-        state.serialize_field("columns", &self.columns)?;
-        state.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for Values2D {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        use serde::de::{self, MapAccess, Visitor};
-        use std::fmt;
-
-        struct Values2DVisitor;
-
-        impl<'de> Visitor<'de> for Values2DVisitor {
-            type Value = Values2D;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("struct Values2D")
-            }
-
-            fn visit_map<V>(self, mut map: V) -> std::result::Result<Values2D, V::Error>
-            where
-                V: MapAccess<'de>,
-            {
-                let mut values = None;
-                let mut columns = None;
-
-                while let Some(key) = map.next_key::<SmolStr>()? {
-                    match key.as_str() {
-                        "values" => {
-                            let vec: Vec<ValueStorage> = map.next_value()?;
-                            values = Some(Xar::from(vec));
-                        }
-                        "columns" => {
-                            columns = Some(map.next_value()?);
-                        }
-                        _ => {
-                            let _: serde::de::IgnoredAny = map.next_value()?;
-                        }
-                    }
-                }
-
-                let values = values.ok_or_else(|| de::Error::missing_field("values"))?;
-                let columns = columns.ok_or_else(|| de::Error::missing_field("columns"))?;
-
-                Ok(Values2D { values, columns })
-            }
-        }
-
-        deserializer.deserialize_struct("Values2D", &["values", "columns"], Values2DVisitor)
-    }
 }
 
 impl Values2D {

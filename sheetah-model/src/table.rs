@@ -73,6 +73,7 @@ impl Table {
 
     #[inline]
     pub fn dims(&self) -> Pos {
+        // TODO: Resolve 2D vs ND.
         self.shape.dims()
     }
 }
