@@ -1,6 +1,6 @@
 use crate::value::Value;
 use stable_hash::impl_stable_hash;
-use std::sync::Arc;
+use std::{any::TypeId, sync::Arc};
 
 #[derive(
     Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, serde::Serialize, serde::Deserialize,
@@ -17,6 +17,44 @@ impl OpticId {
         Self { id }
     }
 }
+
+
+#[derive(Clone, Debug)]
+pub struct ErasedOptic {
+    pub name: String,
+    pub in_type_id: TypeId,
+    pub out_type_id: TypeId,
+    pub as_any: Arc<dyn Any + Send + Sync>,
+}
+
+impl<T: Optic + Send + Sync + 'static> From<T> for ErasedOptic {
+    fn from(optic: T) -> Self {
+        Self {
+            name: optic.name(),
+            in_type_id: TypeId::of::<T::In>(),
+            out_type_id: TypeId::of::<T::Out>(),
+            as_any: Arc::new(optic),
+        }
+    }
+}
+
+impl Optic for ErasedOptic {
+    type In = ValueStorage;
+
+    type Out = ValueStorage;
+
+    fn name(&self) -> String {
+        self.name.to_string()
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct OpticKind {
+    pub name: &'static str,
+    pub create_optics: fn() -> Vec<ErasedOptic>,
+}
+
+inventory::collect!(OpticKind);
 
 // TODO(perf): Look into type safe type level patterns with PolyMap #2
 pub trait Optic {
