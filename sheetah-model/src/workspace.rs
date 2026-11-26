@@ -42,10 +42,8 @@ impl Workspace {
     }
 
     pub async fn list_backend_kinds(&self) -> Vec<String> {
-        let mut backends = Vec::new();
-        for k in self.backend_kinds.keys() {
-            backends.push(k.to_string());
-        }
+        let mut backends = self.backend_kinds.keys().cloned().collect::<Vec<_>>();
+        backends.sort();
         backends
     }
 
