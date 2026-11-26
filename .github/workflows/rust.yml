@@ -1,6 +1,8 @@
 name: rust
 
-on: [push]
+on:
+  push:
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -61,9 +63,11 @@ jobs:
         cargo test --locked --release --verbose -- --ignored
 
     - name: Install cargo-tarpaulin
+      if: github.event_name == 'workflow_dispatch'
       run: cargo install cargo-tarpaulin
 
     - name: Run tests with coverage
+      if: github.event_name == 'workflow_dispatch'
       run: cargo tarpaulin --skip-clean --out Xml --output-dir lcov
 
     - name: Build (dev)
