@@ -64,10 +64,10 @@ mod tests {
             "maybe_add",
             |opt: Option<i32>| opt.map(|v| v + 1),
             |f: Functor<i32, i32>, opt: Option<i32>| {
-                opt.and_then(|s| {
+                opt.map(|s| {
                     let a = s + 1;
                     let new_a = f(a);
-                    Some(new_a - 1)
+                    new_a - 1
                 })
             },
         );
@@ -158,10 +158,10 @@ mod tests {
             "maybe_add",
             |opt: Option<i32>| opt.map(|v| v + 1),
             |f: Functor<i32, i32>, opt: Option<i32>| {
-                opt.and_then(|s| {
+                opt.map(|s| {
                     let a = s + 1;
                     let new_a = f(a);
-                    Some(new_a - 1)
+                    new_a - 1
                 })
             },
         );

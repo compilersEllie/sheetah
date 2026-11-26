@@ -6,8 +6,10 @@ mod tests {
 
     #[test]
     fn test_tab() {
-        let mut tab = Tab::default();
-        tab.active_pane = Index::new(0);
+        let tab = Tab {
+            active_pane: Index::new(0),
+            ..Default::default()
+        };
         assert_eq!(tab.active_pane, Index::new(0));
     }
 

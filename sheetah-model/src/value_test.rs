@@ -56,7 +56,7 @@ mod tests {
 
     #[test]
     fn test_f32_value() {
-        let val = 3.14f32;
+        let val = std::f32::consts::PI;
         assert_eq!(val.name(), "decimal (f32)");
         let cloned = val.cloned();
         assert_eq!(cloned.name(), "decimal (f32)");
@@ -67,7 +67,7 @@ mod tests {
 
     #[test]
     fn test_f64_value() {
-        let val = 3.14f64;
+        let val = std::f64::consts::PI;
         assert_eq!(val.name(), "decimal (f64)");
         let cloned = val.cloned();
         assert_eq!(cloned.name(), "decimal (f64)");

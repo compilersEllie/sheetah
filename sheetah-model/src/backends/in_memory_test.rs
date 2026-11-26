@@ -136,9 +136,9 @@ mod tests {
 
         let view = View {
             table: table_id,
-            cursor: pos.clone(),
+            cursor: pos,
             window: Rect {
-                start: pos.clone(),
+                start: pos,
                 columns: Index::new(1),
                 rows: Index::new(1),
             },
@@ -319,17 +319,14 @@ mod tests {
             .await?;
 
         // Test add_column
-        let mut col_values = Values::default();
-        col_values.push(Box::new(100i32));
+        let col_values: Values = vec![Box::new(100i32)];
         let field_id_1 = 1;
         backend
             .add_column(table_id, field_id_1, Index::new(1), col_values)
             .await?;
 
         // Test add_row
-        let mut row_values = Values::default();
-        row_values.push(Box::new(200i32));
-        row_values.push(Box::new(300i32));
+        let row_values: Values = vec![Box::new(200i32), Box::new(300i32)];
         let field_id_2 = 2;
         backend
             .add_row(table_id, field_id_2, Index::new(1), row_values)
