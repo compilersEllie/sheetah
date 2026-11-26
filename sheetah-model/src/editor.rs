@@ -1,7 +1,7 @@
 use crate::error::Result;
+use crate::shape::Shape;
+use crate::table::TableId;
 use crate::workspace::Workspace;
-use crate::{table::TableId, workspace::Workspace};
-use crate::{shape::Shape, table::TableId, workspace::Workspace};
 use stable_hash::impl_stable_hash;
 use std::{
     fmt::Display,
@@ -111,12 +111,6 @@ pub struct Pos {
 impl Display for Pos {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "({}, {})", self.row, self.column)
-    }
-
-    pub async fn view(&self) -> Result<View> {
-        // TODO(feat): Views should contain tables, cursor locations, unwritten state etc.
-        let mut view = View::default();
-        Ok(view)
     }
 }
 
