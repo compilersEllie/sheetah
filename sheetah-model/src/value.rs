@@ -1,7 +1,7 @@
 use crate::error::{Result, SheetahError};
 use crate::optic::OpticId;
 use crate::indexing::multi::BASE_DIMS_SIZE;
-use crate::indexing::{Index, Pos};
+use crate::indexing::{Index, Pos, Pos2D};
 use serde::{Deserialize, Serialize, Serializer};
 use smallvec::SmallVec;
 use smol_str::SmolStr;
@@ -575,7 +575,7 @@ impl Values2D {
     }
 
     #[inline]
-    pub fn pos(&self, index: Index) -> Result<Pos> {
+    pub fn pos(&self, index: Index) -> Result<Pos2D> {
         if index.ind() >= self.len() {
             return Err(SheetahError::InternalError(format!(
                 "Index {} out of range 0..{}",
@@ -584,7 +584,7 @@ impl Values2D {
             )));
         }
         // TODO(perf): Avoid divide methods
-        Ok(Pos {
+        Ok(Pos2D {
             column: (index.raw() % self.columns.raw()).into(),
             row: (index.raw() / self.columns.raw()).into(),
         })

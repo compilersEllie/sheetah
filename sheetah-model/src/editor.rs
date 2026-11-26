@@ -1,15 +1,8 @@
 use crate::error::Result;
-use crate::indexing::multi::BASE_DIMS_SIZE;
-use crate::indexing::Index;
-use crate::indexing::planar::{Pos2D, Rect};
+pub use crate::indexing::{Index, Pos};
+pub use crate::indexing::planar::{Pos2D, Rect};
 use crate::{shape::Shape, table::TableId, workspace::Workspace};
-use smallvec::SmallVec;
-use stable_hash::impl_stable_hash;
-use std::{
-    fmt::Display,
-    ops::{Add, AddAssign, Mul},
-    path::PathBuf,
-};
+use std::path::PathBuf;
 
 // TODO(feat): An editor module with loro documents and hash trees etc. #1
 #[derive(Default)]

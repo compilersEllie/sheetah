@@ -1,5 +1,5 @@
 use smallvec::{smallvec, SmallVec};
-use stable_hash::impl_stable_hash;
+use stable_hash::{impl_stable_hash, StableHash, StableHasher};
 use std::{
     fmt::Display,
     ops::{Add, AddAssign, Mul},
@@ -26,25 +26,53 @@ pub struct Pos {
     pub dims: SmallVec<[Index; BASE_DIMS_SIZE]>,
 }
 
-impl_stable_hash!(Pos { dims });
+impl StableHash for Pos {
+    fn stable_hash<H: StableHasher>(&self, hasher: &mut H) {
+        for dim in &self.dims {
+            dim.stable_hash(hasher);
+        }
+    }
+}
+
+impl Pos {
+    #[inline]
+    pub fn row(&self) -> Index {
+        self.dims[0]
+    }
+
+    #[inline]
+    pub fn column(&self) -> Index {
+        self.dims[1]
+    }
+}
 
 impl Add<Pos> for Pos
 {
     type Output = Pos;
     #[inline]
     fn add(self, other: Pos) -> Self::Output {
-        Self {
-            row: self.row + other.row,
-            column: self.column + other.column,
+        let mut dims = self.dims;
+        for (i, other_dim) in other.dims.iter().enumerate() {
+            if i < dims.len() {
+                dims[i] += *other_dim;
+            } else {
+                dims.push(*other_dim);
+            }
         }
+        Self { dims }
     }
 }
 
 impl AddAssign<Pos> for Pos {
     #[inline]
     fn add_assign(&mut self, other: Pos) {
-        self.row += other.row;
-        self.column += other.column;
+        for (i, other_dim) in other.dims.iter().enumerate() {
+            if i < self.dims.len() {
+                self.dims[i] += *other_dim;
+            } else {
+                self.dims.push(*other_dim);
+            }
+        }
     }
 }
 
@@ -53,7 +81,7 @@ impl From<Pos2D> for Pos {
     fn from(val: Pos2D) -> Pos {
         // Despite creating a vector here, smallvec is stack memory so this
         // avoids amy allocations.
-        Pos2D {
+        Pos {
           dims: smallvec![val.row, val.column]
         }
     }

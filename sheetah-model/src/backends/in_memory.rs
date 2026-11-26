@@ -97,17 +97,17 @@ impl Backend for InMemoryBackend {
     ) -> Result<()> {
         let table_info = self.get(&table).await?;
 
-        if pos.column + data.columns() > table_info.dims().column {
+        if pos.column + data.columns() > table_info.dims().column() {
             return Err(SheetahError::DimensionMismatch {
-                expected: table_info.dims().column,
-                found: pos.column + data.columns(),
+                expected: table_info.dims().column().ind(),
+                found: (pos.column + data.columns()).ind(),
             });
         }
 
-        if pos.row + data.rows() > table_info.dims().row {
+        if pos.row + data.rows() > table_info.dims().row() {
             return Err(SheetahError::DimensionMismatch {
-                expected: table_info.dims().row,
-                found: pos.row + data.rows(),
+                expected: table_info.dims().row().ind(),
+                found: (pos.row + data.rows()).ind(),
             });
         }
 
@@ -137,7 +137,7 @@ impl Backend for InMemoryBackend {
             SheetahError::BackendError(format!("Could not get table data for table {:?}", table))
         })?;
 
-        table_data.add_row(row_index, row.into_vec().into())?;
+        table_data.add_row(row_index, row)?;
 
         let table_info = self
             .tables
@@ -159,7 +159,7 @@ impl Backend for InMemoryBackend {
             SheetahError::BackendError(format!("Could not get table data for table {:?}", table))
         })?;
 
-        table_data.add_column(column_index, column.into_vec().into())?;
+        table_data.add_column(column_index, column)?;
 
         let table_info = self
             .tables
@@ -179,13 +179,16 @@ impl Backend for InMemoryBackend {
         }
 
         let dims = table_info.dims();
-        let num_elements = dims.column.ind() * dims.row.ind();
+        let num_elements = dims.column().ind() * dims.row().ind();
         let mut values = Xar::new();
         for _ in 0..num_elements {
             values.push(ValueStorage::I32(0));
         }
-        let table_data =
-            Values2D::new(dims.column, dims.row, Values::new(table_info.shape, values))?;
+        let table_data = Values2D::new(
+            dims.column(),
+            dims.row(),
+            Values::new(table_info.shape.dims_as_vec(), values.into_iter().collect())?,
+        )?;
 
         self.tables.insert(table, table_info);
         self.table_data.insert(table, table_data);

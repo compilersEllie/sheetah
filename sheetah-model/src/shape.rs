@@ -58,6 +58,10 @@ impl Shape {
         }
     }
 
+    pub fn dims_as_vec(&self) -> Vec<Index> {
+        self.dims.iter().map(|vals| vals.len()).collect()
+    }
+
     pub fn add_field(&mut self, info: FieldInfo) -> Result<()> {
         self.fields.push(info);
         Ok(())
