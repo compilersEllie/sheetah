@@ -1,8 +1,8 @@
-use crate::editor::{Index, Pos, View, Rect};
+use crate::editor::{Index, Pos, View};
 use crate::error::Result;
 use crate::shape::FieldId;
 use crate::table::{Table, TableId};
-use crate::value::{Value, Values, Values2D, Values2DRef};
+use crate::value::{Values, Values2D, Values2DRef};
 use async_trait::async_trait;
 use std::fmt::Debug;
 use std::path::PathBuf;
@@ -61,7 +61,7 @@ pub trait Backend: Debug + Send + Sync {
         column_transposed: Values,
     ) -> Result<()>;
 
-    /// Setup files for thee backend.
+    /// Setup files for the backend.
     async fn setup(&mut self) -> Result<()>;
     /// Ensure all data is stored to  the backend.
     async fn flush(&mut self) -> Result<()>;
