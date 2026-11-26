@@ -1,8 +1,10 @@
-use crate::optic::{Optic, OpticId};
+use std::collections::BTreeSet;
+
+use crate::optic::{ErasedOptic, Optic, OpticId, OpticKind};
 
 #[derive(Default)]
 pub struct OpticStore {
-    optic_by_id: Vec<Optic>,
+    optic_by_id: Vec<ErasedOptic>,
     optic_by_name: BTreeSet<(String, OpticId)>,
 
     // TTODO(feat): optic_by_params: HashMap<TypeId, VecOpticId>>,
@@ -15,23 +17,22 @@ impl OpticStore {
         let mut this = Self::default();
         // Register the optics .
         for kind in inventory::iter::<OpticKind> {
-            let id = this.optics_by_id.len();
-            this.optics_by_id
-                .insert(kind.clone());
-            this.optics_by_name
-                .insert((kind.name.to_string(), id));
+            this.add_optics(kind);
         }
         this
     }
+
+    pub fn optic_by_id(&self, id: OpticId) -> &ErasedOptic {
+        &self.optic_by_id[id.id as usize]
+    }
+
+    pub fn add_optics(&mut self, kind: &OpticKind) {
+        let optics = (kind.create)();
+        for optic in optics {
+            let id = OpticId { id: self.optic_by_id.len() as u128 };
+            self.optic_by_id.push(optic);
+            self.optic_by_name
+                .insert((kind.name.to_string(), id));
+        }
+    }
 }
-
-
-#[derive(Clone)]
-pub struct OpticKind {
-    pub name: &'static str,
-    /// Lazily create an on disk store for this backend.
-    pub create:
-        &'static (dyn Fn() -> Arc<RwLock<dyn Optic>> + Sync + Send + 'static),
-}
-
-inventory::collect!(OpticKind);
