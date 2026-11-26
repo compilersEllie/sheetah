@@ -82,6 +82,27 @@ impl Value for i32 {
 }
 
 #[typetag::serde]
+impl Value for Option<i32> {
+    fn name(&self) -> String {
+        match self {
+            Some(v) => format!("some {}", v.name()),
+            None => "none".to_string(),
+        }
+    }
+
+    fn cloned(&self) -> Box<dyn Value> {
+        Box::new(*self)
+    }
+
+    fn bytes(&self) -> Vec<u8> {
+        match self {
+            Some(v) => b"a".iter().chain(&v.to_be_bytes()).cloned().collect(),
+            None => b"n".to_vec(),
+        }
+    }
+}
+
+#[typetag::serde]
 impl Value for i64 {
     fn name(&self) -> String {
         "integer (i64)".to_string()

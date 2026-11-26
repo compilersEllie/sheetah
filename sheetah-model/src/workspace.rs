@@ -1,5 +1,6 @@
 use crate::backend::{Backend, BackendKind, BackendOptions};
 use crate::error::{Result, SheetahError};
+use crate::optic_store::OpticStore;
 use crate::shape::FieldId;
 use crate::table::{Table, TableId, TableName};
 use futures::future::join_all;
@@ -7,7 +8,6 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use crate::optic_store::OpticStore;
 
 #[derive(Default)]
 pub struct Workspace {
