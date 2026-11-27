@@ -70,6 +70,11 @@ impl_stable_hash!(Dimension { order, sort });
 
 impl Dimension {
     #[inline]
+    pub fn order(&self) -> &[FieldId] {
+        &self.order
+    }
+
+    #[inline]
     pub fn sort(&self) -> &[(FieldId, SortOrder)] {
         &self.sort
     }
