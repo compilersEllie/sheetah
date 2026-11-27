@@ -15,6 +15,15 @@ SQLite database `sheetah.sqlite` in the current working directory, seeds an empt
 (4 rows by 4 columns), and saves it. On later launches it loads the first stored table from
 that file, so edits survive a restart.
 
+The window requests client-side decorations and the title `Sheetah`. A custom titlebar is drawn
+when the platform uses client-side decorations, and on macOS and Windows where the native
+titlebar is hidden. It follows the OS button layout from `cx.button_layout()` and observes layout
+changes, falling back to close/minimize/maximize on the left on macOS and minimize/maximize/close
+on the right elsewhere. It only shows controls supported by `window_controls()` and the window's
+resizable/minimizable settings. The titlebar can be dragged to move the window; double-clicking it
+maximizes or restores the window, and the minimize, maximize, and close buttons perform those
+actions. The maximize button shows a restore glyph when the window is maximized or tiled.
+
 ## Controls
 
 | Input | Action |
