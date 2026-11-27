@@ -24,6 +24,14 @@ Linux desktop-shell dependencies (see `README.md`):
 
 CI additionally installs GTK/WebKit development packages for the gpui shell.
 
+## Testing & Coverage
+
+- **Strategy**: Focus on comprehensive unit testing. Use `proptest` for property-based testing of complex, critical data structures (e.g., `Value`, `Optic`).
+- **Coverage Goals**:
+  - **100% Coverage** for Critical Core: `value.rs`, `optic.rs`, `shape.rs`, `table.rs`, `editor.rs`, `workspace.rs`.
+  - **>80% Coverage** for Supporting Modules: e.g., `backends/in_memory.rs`.
+- **Prioritization**: Work proceeds module-by-module through the Phase 1 "Critical Core" list.
+
 ## Layout
 
 - `sheetah-model/`
@@ -38,11 +46,10 @@ CI additionally installs GTK/WebKit development packages for the gpui shell.
 
 ## Key patterns
 
-- Errors flow through the `Result<T>` alias over `SheetahError`; add new variants in `error.rs`.
-- Persistence flows through the async `Backend` trait behind `BackendKind` / `BackendOptions`;
-  `Workspace` composes backend, tables, and editor state.
-- Immutable data updates use the functional optics pattern; reference optics via `OpticId`.
-- Cell data uses the `Value` trait with `Values` / `Values2D` grid types.
+- **Errors**: Flow through the `Result<T>` alias over `SheetahError`. Add new variants in `error.rs`.
+- **Persistence**: Flows through the async `Backend` trait behind `BackendKind` / `BackendOptions`. `Workspace` composes backend, tables, and editor state.
+- **Immutability**: Data updates use the functional optics pattern; reference optics via `OpticId`.
+- **Cell Data**: Uses the `Value` trait with `Values` / `Values2D` grid types.
 
 ## Reference docs
 
@@ -52,10 +59,15 @@ CI additionally installs GTK/WebKit development packages for the gpui shell.
 
 ## Current state
 
-Early-stage scaffold: docs and domain model lead implementation; `sheetah-gpui` holds a GPUI
-counter example rather than the Sheetah interface yet.
+- **Phase 0 (Foundation & Coverage)**: The domain model implementation is leading. Current focus is on resolving build errors and driving test coverage toward 100% for critical `sheetah-model` modules.
+
+## Agent Guidelines
+
+- **Research First**: Before proposing architectural changes, consult `docs/implementation_plan_v1.0.md` and `docs/ui_plan_v1.0.md`.
+- **Test-Driven Implementation**: When adding features or increasing coverage, prioritize writing tests that reflect the intended behavior and use `proptest` where appropriate.
+- **Build Integrity**: Always ensure `cargo test` passes before concluding a task.
+- **Consistency**: Adhere to existing patterns (errors, optics, persistence) to maintain codebase harmony.
 
 ## Commit conventions
 
-Use conventional commits with crate-scoped prefixes, e.g. `feat(sheetah-model):`, `fix(sheetah-gpui):`,
-`docs(sheetah-gpui):`, `chore:`, or `style(sheetah-gpui):`.
+Use conventional commits with crate-scoped prefixes, e.g. `feat(sheetah-model):`, `fix(sheetah-gpui):`, `docs(sheetah-gpui):`, `chore:`, or `style(sheetah-gpui):`.
