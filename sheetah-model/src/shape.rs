@@ -93,10 +93,6 @@ impl Dimension {
         } else {
             self.order.push(id);
         }
-    }
-
-    pub fn add_field(&mut self, info: FieldInfo) -> Result<()> {
-        self.fields.push(info);
         Ok(())
     }
 

@@ -268,6 +268,9 @@ impl ValueInfo {
     }
 }
 
+/// The boxed trait object storage used by erased optics.
+pub type ValueStorage = Box<dyn Value>;
+
 pub type Values = Vec<Box<dyn Value>>;
 
 #[derive(Default, Debug)]

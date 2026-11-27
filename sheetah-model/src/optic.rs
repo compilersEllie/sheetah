@@ -1,6 +1,9 @@
-use crate::value::{Value, ValueStorage};
+use crate::value::Value;
 use stable_hash::impl_stable_hash;
-use std::{any::{Any, TypeId}, sync::Arc};
+use std::{
+    any::{Any, TypeId},
+    sync::Arc,
+};
 
 #[derive(
     Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, serde::Serialize, serde::Deserialize,
@@ -17,7 +20,6 @@ impl OpticId {
         Self { id }
     }
 }
-
 
 #[derive(Clone, Debug)]
 pub struct ErasedOptic {
@@ -38,16 +40,6 @@ impl<T: Optic + Send + Sync + 'static> From<T> for ErasedOptic {
     }
 }
 
-impl Optic for ErasedOptic {
-    type In = ValueStorage;
-
-    type Out = ValueStorage;
-
-    fn name(&self) -> String {
-        self.name.to_string()
-    }
-}
-
 #[derive(Clone, Copy)]
 pub struct OpticKind {
     pub name: &'static str,
@@ -64,8 +56,8 @@ pub trait Optic {
     fn name(&self) -> String;
 }
 
-pub type Functor<S, A> = Arc<Box<dyn Fn(S) -> A>>;
-pub type BiFunctor<S, T, A> = Arc<Box<dyn Fn(S, T) -> A>>;
+pub type Functor<S, A> = Arc<Box<dyn Fn(S) -> A + Send + Sync>>;
+pub type BiFunctor<S, T, A> = Arc<Box<dyn Fn(S, T) -> A + Send + Sync>>;
 
 #[derive(Clone)]
 pub struct Iso<S: Value + 'static, A: Value + 'static> {
@@ -78,8 +70,8 @@ pub struct Iso<S: Value + 'static, A: Value + 'static> {
 impl<S: Value + 'static, A: Value + 'static> Iso<S, A> {
     pub fn new(
         name: impl Into<String>,
-        view_impl: impl Fn(S) -> A + 'static,
-        review_impl: impl Fn(A) -> S + 'static,
+        view_impl: impl Fn(S) -> A + 'static + Send + Sync,
+        review_impl: impl Fn(A) -> S + 'static + Send + Sync,
     ) -> Self {
         Self {
             name: name.into(),
@@ -149,8 +141,8 @@ pub struct Lens<S: Value + 'static, A: Value + 'static> {
 impl<S: Value + 'static, A: Value + 'static> Lens<S, A> {
     pub fn new(
         name: impl Into<String>,
-        view_impl: impl Fn(S) -> A + 'static,
-        set_impl: impl Fn(S, A) -> S + 'static,
+        view_impl: impl Fn(S) -> A + 'static + Send + Sync,
+        set_impl: impl Fn(S, A) -> S + 'static + Send + Sync,
     ) -> Self {
         Self {
             name: name.into(),
@@ -209,8 +201,8 @@ pub struct Prism<S: Value + 'static, A: Value + 'static> {
 impl<S: Value + 'static, A: Value + 'static> Prism<S, A> {
     pub fn new(
         name: impl Into<String>,
-        preview_impl: impl Fn(S) -> Option<A> + 'static,
-        review_impl: impl Fn(A) -> S + 'static,
+        preview_impl: impl Fn(S) -> Option<A> + 'static + Send + Sync,
+        review_impl: impl Fn(A) -> S + 'static + Send + Sync,
     ) -> Self {
         Self {
             name: name.into(),
@@ -267,8 +259,8 @@ pub struct Traversal<S: Value + 'static, A: Value + 'static> {
 impl<S: Value + 'static, A: Value + 'static> Traversal<S, A> {
     pub fn new(
         name: impl Into<String>,
-        to_list_impl: impl Fn(Option<S>) -> Vec<A> + 'static,
-        over_impl: impl Fn(Functor<A, A>, Option<S>) -> Option<S> + 'static,
+        to_list_impl: impl Fn(Option<S>) -> Vec<A> + 'static + Send + Sync,
+        over_impl: impl Fn(Functor<A, A>, Option<S>) -> Option<S> + 'static + Send + Sync,
     ) -> Self {
         Self {
             name: name.into(),
@@ -304,8 +296,8 @@ pub struct Affine<S: Value + 'static, A: Value + 'static> {
 impl<S: Value + 'static, A: Value + 'static> Affine<S, A> {
     pub fn new(
         name: impl Into<String>,
-        to_list_impl: impl Fn(Option<S>) -> Option<A> + 'static,
-        over_impl: impl Fn(Functor<A, A>, Option<S>) -> Option<S> + 'static,
+        to_list_impl: impl Fn(Option<S>) -> Option<A> + 'static + Send + Sync,
+        over_impl: impl Fn(Functor<A, A>, Option<S>) -> Option<S> + 'static + Send + Sync,
     ) -> Self {
         Self {
             name: name.into(),
