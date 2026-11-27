@@ -4,6 +4,9 @@ mod tests {
     use crate::error::Result;
     use crate::optic::OpticId;
     use crate::value::*;
+    use proptest::prelude::*;
+    use stable_hash::crypto::CryptoStableHasher;
+    use stable_hash::{FieldAddress, StableHash, StableHasher};
 
     #[test]
     fn test_i8_value() {
@@ -94,9 +97,29 @@ mod tests {
     fn test_option_value() {
         let val: Option<Box<dyn Value>> = Some(Box::new(42i32));
         assert_eq!(val.name(), "some integer (i32)");
+        assert_eq!(val.bytes()[0], b'a');
+
+        assert_eq!(val.cloned().bytes(), val.bytes());
 
         let none_val = None::<Box<dyn Value>>;
         assert_eq!(none_val.name(), "none");
+        assert_eq!(none_val.bytes(), vec![b'n']);
+        assert_eq!(none_val.cloned().bytes(), none_val.bytes());
+    }
+
+    #[test]
+    fn test_option_i32_value() {
+        let some = Some(42i32);
+        assert_eq!(some.name(), "some integer (i32)");
+        assert_eq!(some.bytes()[0], b'a');
+
+        let cloned = some.cloned();
+        assert_eq!(cloned.bytes(), some.bytes());
+
+        let none = None::<i32>;
+        assert_eq!(none.name(), "none");
+        assert_eq!(none.bytes(), vec![b'n']);
+        assert_eq!(none.cloned().bytes(), none.bytes());
     }
 
     #[test]
@@ -122,6 +145,22 @@ mod tests {
 
         info.reset_format();
         assert_eq!(info.format(), &None);
+    }
+
+    #[test]
+    fn test_value_info_new() {
+        let info = ValueInfo::new("custom".to_string(), 7);
+        assert_eq!(info.name(), "custom");
+        assert_eq!(info.format(), &None);
+    }
+
+    #[test]
+    fn test_value_stable_hash() {
+        let value: Box<dyn Value> = Box::new(42i32);
+        let reference: &dyn Value = &*value;
+        let mut hasher = CryptoStableHasher::new();
+        reference.stable_hash(FieldAddress::root(), &mut hasher);
+        let _ = hasher.finish();
     }
 
     #[test]
@@ -289,5 +328,99 @@ mod tests {
         let res = v2d.add_column(Index::new(1), wrong_col);
         assert!(res.is_err());
         Ok(())
+    }
+
+    #[test]
+    fn test_values2d_out_of_range() -> Result<()> {
+        let values: Values = vec![Box::new(1i32), Box::new(2i32)];
+        let mut v2d = Values2D::new(Index::new(2), Index::new(1), values)?;
+
+        assert!(
+            v2d.add_row(Index::new(3), vec![Box::new(3i32), Box::new(4i32)])
+                .is_err()
+        );
+        assert!(v2d.add_column(Index::new(5), vec![Box::new(3i32)]).is_err());
+        assert!(v2d.index(Index::new(0), Index::new(3)).is_err());
+        assert!(v2d.index(Index::new(5), Index::new(0)).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_values2dref_validation_and_pos() -> Result<()> {
+        let val1 = 1i32;
+        let values: Vec<&dyn Value> = vec![&val1, &val1];
+
+        assert!(Values2DRef::new(Index::new(2), Index::new(2), values.clone()).is_err());
+
+        let v2dref = Values2DRef::new(Index::new(2), Index::new(1), values)?;
+        assert!(!v2dref.is_empty());
+        assert_eq!(
+            v2dref.pos(Index::new(1)),
+            Pos {
+                column: Index::new(1),
+                row: Index::new(0),
+            }
+        );
+
+        let empty = Values2DRef::new(Index::new(0), Index::new(0), vec![])?;
+        assert!(empty.is_empty());
+        Ok(())
+    }
+
+    proptest! {
+        #[test]
+        fn i32_value_clone_preserves_bytes(value in any::<i32>()) {
+            let boxed: Box<dyn Value> = Box::new(value);
+            prop_assert_eq!(boxed.name(), "integer (i32)");
+            prop_assert_eq!(boxed.cloned().bytes(), boxed.bytes());
+        }
+
+        #[test]
+        fn string_value_clone_preserves_bytes(value in any::<String>()) {
+            let boxed: Box<dyn Value> = Box::new(value);
+            prop_assert_eq!(boxed.name(), "text");
+            prop_assert_eq!(boxed.cloned().bytes(), boxed.bytes());
+        }
+
+        #[test]
+        fn values2d_index_pos_roundtrip(
+            columns in 1u32..=8,
+            rows in 1u32..=8,
+            column in 0u32..8,
+            row in 0u32..8,
+        ) {
+            let columns = Index::new(columns);
+            let rows_index = Index::new(rows);
+            let len = (columns * rows_index) as usize;
+            let values: Values = (0..len).map(|_| Box::new(0i32) as Box<dyn Value>).collect();
+            let grid = Values2D::new(columns, rows_index, values).unwrap();
+
+            let column = Index::new(column % columns.raw());
+            let row = Index::new(row % rows_index.raw());
+            let pos = grid.pos(grid.index(column, row).unwrap()).unwrap();
+
+            prop_assert_eq!(pos, Pos { column, row });
+        }
+
+        #[test]
+        fn values2d_set_get_roundtrip(
+            columns in 1u32..=8,
+            rows in 1u32..=8,
+            value in any::<i32>(),
+        ) {
+            let columns = Index::new(columns);
+            let rows_index = Index::new(rows);
+            let len = (columns * rows_index) as usize;
+            let values: Values = (0..len).map(|_| Box::new(0i32) as Box<dyn Value>).collect();
+            let mut grid = Values2D::new(columns, rows_index, values).unwrap();
+
+            let column = Index::new(0);
+            let row = Index::new(0);
+            grid.set(column, row, Box::new(value)).unwrap();
+
+            let mut expected = vec![b'i', 32];
+            expected.extend_from_slice(&value.to_be_bytes());
+            prop_assert_eq!(grid.get(column, row).unwrap().bytes(), expected);
+        }
     }
 }

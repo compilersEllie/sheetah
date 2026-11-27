@@ -4,6 +4,8 @@ mod tests {
     use crate::error::Result;
     use crate::shape::*;
     use crate::value::ValueInfo;
+    use stable_hash::crypto::CryptoStableHasher;
+    use stable_hash::{FieldAddress, StableHash, StableHasher};
 
     #[test]
     fn test_dimension_add() -> Result<()> {
@@ -59,6 +61,25 @@ mod tests {
         assert_eq!(info.kind().format(), &None);
 
         Ok(())
+    }
+
+    #[test]
+    fn test_sort_order_stable_hash() {
+        let mut ascending = CryptoStableHasher::new();
+        SortOrder::Ascending.stable_hash(FieldAddress::root(), &mut ascending);
+        let _ = ascending.finish();
+
+        let mut descending = CryptoStableHasher::new();
+        SortOrder::Descending.stable_hash(FieldAddress::root(), &mut descending);
+        let _ = descending.finish();
+    }
+
+    #[test]
+    fn test_field_info_kind_mut() {
+        let mut info = FieldInfo::new(1, None, ValueInfo::default());
+        info.kind_mut().set_format(crate::optic::OpticId::new(7));
+
+        assert_eq!(info.kind().format(), &Some(crate::optic::OpticId::new(7)));
     }
 
     #[test]

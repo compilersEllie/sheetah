@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod tests {
     use crate::optic::*;
+    use proptest::prelude::*;
+    use std::any::TypeId;
     use std::sync::Arc;
 
     #[test]
@@ -171,5 +173,44 @@ mod tests {
         assert_eq!(traversal.to_list(Some(5)), vec![6]);
         assert_eq!(traversal.to_list(None), vec![]);
         assert_eq!(traversal.over(f.clone(), Some(5)), Some(6)); // 5 -> 6 -> 7 -> 6
+    }
+
+    #[test]
+    fn optic_names_and_erasure() {
+        let prism = Prism::new("maybe", |n: i32| Some(n), |n| n);
+        assert_eq!(prism.name(), "maybe");
+
+        let traversal = Traversal::new("each", |n: Option<i32>| vec![n.unwrap()], |_f, n| n);
+        assert_eq!(traversal.name(), "each");
+
+        let affine = Affine::new("maybe_add", |n: Option<i32>| n, |_f, n| n);
+        assert_eq!(affine.name(), "maybe_add");
+
+        let erased = ErasedOptic::from(Iso::new("erased", |n: i32| n as i64, |n: i64| n as i32));
+        assert_eq!(erased.name, "erased");
+        assert_eq!(erased.in_type_id, TypeId::of::<i32>());
+        assert_eq!(erased.out_type_id, TypeId::of::<i64>());
+    }
+
+    proptest! {
+        #[test]
+        fn iso_roundtrip_for_all_i32(value in any::<i32>()) {
+            let iso = Iso::new(
+                "wrapping_add1",
+                |n: i32| n.wrapping_add(1),
+                |n: i32| n.wrapping_sub(1),
+            );
+
+            prop_assert_eq!(iso.review(iso.view(value)), value);
+            prop_assert_eq!(iso.view(iso.review(value)), value);
+        }
+
+        #[test]
+        fn lens_laws_for_all_i32(source in any::<i32>(), focus in any::<i32>()) {
+            let lens = Lens::new("identity", |n: i32| n, |_old: i32, new: i32| new);
+
+            prop_assert_eq!(lens.view(lens.set(source, focus)), focus);
+            prop_assert_eq!(lens.set(source, lens.view(source)), source);
+        }
     }
 }
