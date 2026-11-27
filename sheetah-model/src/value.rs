@@ -16,6 +16,10 @@ pub trait Value: Debug + Sync + Send + 'static {
 
     fn bytes(&self) -> Vec<u8>;
 
+    fn to_text(&self) -> String {
+        format!("{:?}", self)
+    }
+
     fn type_id(&self) -> TypeId {
         Any::type_id(self)
     }
@@ -172,6 +176,10 @@ impl Value for String {
         Box::new(self.clone())
     }
 
+    fn to_text(&self) -> String {
+        self.clone()
+    }
+
     fn bytes(&self) -> Vec<u8> {
         b"s".iter()
             .chain(&self.len().to_be_bytes())
@@ -189,6 +197,10 @@ impl Value for Box<dyn Value> {
 
     fn cloned(&self) -> Box<dyn Value> {
         Box::new((&**self as &dyn Value).cloned())
+    }
+
+    fn to_text(&self) -> String {
+        (&**self as &dyn Value).to_text()
     }
 
     fn bytes(&self) -> Vec<u8> {

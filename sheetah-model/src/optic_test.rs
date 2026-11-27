@@ -112,7 +112,7 @@ mod tests {
 
         let f: Functor<i32, i32> = Arc::new(Box::new(|n| n + 1));
         assert_eq!(traversal.to_list(Some(5)), vec![10]);
-        assert_eq!(traversal.to_list(None), vec![]);
+        assert_eq!(traversal.to_list(None), Vec::<i32>::new());
         assert_eq!(traversal.over(f.clone(), Some(5)), Some(55));
     }
 
@@ -127,8 +127,8 @@ mod tests {
 
         let f: Functor<i32, i32> = Arc::new(Box::new(|n| n + 1));
         assert_eq!(traversal.to_list(Some(4)), vec![2]);
-        assert_eq!(traversal.to_list(Some(5)), vec![]);
-        assert_eq!(traversal.to_list(None), vec![]);
+        assert_eq!(traversal.to_list(Some(5)), Vec::<i32>::new());
+        assert_eq!(traversal.to_list(None), Vec::<i32>::new());
 
         // over(f, Some(4)):
         // source is Some(4).
@@ -171,7 +171,7 @@ mod tests {
         let f: Functor<i32, i32> = Arc::new(Box::new(|n| n + 1));
 
         assert_eq!(traversal.to_list(Some(5)), vec![6]);
-        assert_eq!(traversal.to_list(None), vec![]);
+        assert_eq!(traversal.to_list(None), Vec::<i32>::new());
         assert_eq!(traversal.over(f.clone(), Some(5)), Some(6)); // 5 -> 6 -> 7 -> 6
     }
 
