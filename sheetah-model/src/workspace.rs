@@ -363,7 +363,7 @@ mod tests {
         let workspace = Workspace::new();
         assert_eq!(
             workspace.list_backend_kinds().await,
-            vec!["In Memory (volatile)".to_string(),]
+            vec!["In Memory (volatile)".to_string(), "SQLite".to_string(),]
         );
         Ok(())
     }

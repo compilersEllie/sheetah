@@ -27,6 +27,18 @@ impl InMemoryBackend {
             table_data: HashMap::new(),
         }
     }
+
+    pub(crate) fn tables(&self) -> &HashMap<TableId, Table> {
+        &self.tables
+    }
+
+    pub(crate) fn table_data(&self) -> &HashMap<TableId, Values2D> {
+        &self.table_data
+    }
+
+    pub(crate) fn table_data_mut(&mut self) -> &mut HashMap<TableId, Values2D> {
+        &mut self.table_data
+    }
 }
 
 inventory::submit!(BackendKind {

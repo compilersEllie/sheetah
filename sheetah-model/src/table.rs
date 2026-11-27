@@ -27,6 +27,10 @@ impl TableId {
     pub fn new(id: u128) -> Self {
         Self { id }
     }
+
+    pub fn raw(&self) -> u128 {
+        self.id
+    }
 }
 
 #[derive(Default, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
