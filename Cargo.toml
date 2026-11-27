@@ -4,6 +4,3 @@ members = [
     "sheetah-gpui",
     "sheetah-model",
 ]
-
-[workspace.dependencies]
-sheetah-model = { path = "./sheetah-model/" }
