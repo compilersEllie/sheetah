@@ -1,6 +1,5 @@
 use crate::backend::{Backend, BackendKind, BackendOptions};
 use crate::error::{Result, SheetahError};
-use crate::optic_store::OpticStore;
 use crate::shape::FieldId;
 use crate::table::{Table, TableId, TableName};
 use futures::future::join_all;
@@ -21,9 +20,6 @@ pub struct Workspace {
     backend_kinds: HashMap<String, BackendKind>,
     /// The next available field ID to be used.
     next_field_id: FieldId,
-
-    /// A map of store types the workspace can create and use.
-    optics: OpticStore, // TODO(bug): Do not serialise, make static S.
 }
 
 impl Workspace {
