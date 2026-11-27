@@ -1,207 +1,420 @@
 #![cfg_attr(target_family = "wasm", no_main)]
 
-//! Example demonstrating GPUI's testing infrastructure.
-//!
-//! When run normally, this displays an interactive counter window.
-//! The tests below demonstrate various GPUI testing patterns.
-//!
-//! Run the app: cargo run -p gpui --example testing
-//! Run tests:   cargo test -p gpui --example testing --features test-support
-
 mod fonts;
 
 use gpui::{
-    actions, div, prelude::*, px, rgb, size, App, Bounds, Context, FocusHandle, Focusable, Render,
-    Task, Window, WindowBounds, WindowOptions,
+    div, prelude::*, px, rgb, size, App, Bounds, ClickEvent, Context, Div, FocusHandle, Focusable,
+    KeyDownEvent, Render, Stateful, Window, WindowBounds, WindowOptions,
 };
 use gpui_platform::application;
+use sheetah_model::backend::{Backend, BackendOptions};
+use sheetah_model::backends::sqlite::SqliteBackend;
+use sheetah_model::editor::{Index, Pos};
+use sheetah_model::error::{Result, SheetahError};
+use sheetah_model::table::{Table, TableId, TableName};
+use sheetah_model::value::{Value, Values, Values2D};
+use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
-actions!(counter, [Increment, Decrement]);
-
-struct Counter {
-    count: i32,
+struct Spreadsheet {
+    backend: Arc<RwLock<SqliteBackend>>,
+    table_id: Option<TableId>,
+    cells: Vec<Vec<String>>,
+    selected: (u32, u32),
+    draft: String,
+    editing: bool,
+    status: String,
+    next_field_id: u32,
     focus_handle: FocusHandle,
-    _subscription: gpui::Subscription,
 }
 
-/// Event emitted by Counter
-struct CounterEvent;
-
-impl gpui::EventEmitter<CounterEvent> for Counter {}
-
-impl Counter {
+impl Spreadsheet {
     fn new(cx: &mut Context<Self>) -> Self {
-        let subscription = cx.subscribe_self(|this: &mut Self, _event: &CounterEvent, _cx| {
-            this.count = 999;
-        });
+        let backend = Arc::new(RwLock::new(SqliteBackend::new(BackendOptions {
+            name: "local".to_string(),
+            version: "0".to_string(),
+            relative_path: PathBuf::from("sheetah.sqlite"),
+        })));
+        let startup_backend = backend.clone();
 
-        Self {
-            count: 0,
-            focus_handle: cx.focus_handle(),
-            _subscription: subscription,
-        }
-    }
-
-    fn increment(&mut self, _: &Increment, _window: &mut Window, cx: &mut Context<Self>) {
-        self.count += 1;
-        cx.notify();
-    }
-
-    fn decrement(&mut self, _: &Decrement, _window: &mut Window, cx: &mut Context<Self>) {
-        self.count -= 1;
-        cx.notify();
-    }
-
-    fn load(&self, cx: &mut Context<Self>) -> Task<()> {
         cx.spawn(async move |this, cx| {
-            // Simulate loading data (e.g., from disk or network)
-            this.update(cx, |counter, cx| {
-                counter.count = 100;
+            let result = async {
+                let mut guard = startup_backend.write().await;
+                guard.setup().await?;
+                let id = match guard.table_ids().first().copied() {
+                    Some(id) => id,
+                    None => {
+                        let table = seed_table()?;
+                        let id = table.id();
+                        guard.insert(id, table).await?;
+                        guard.flush().await?;
+                        id
+                    }
+                };
+                let cells = guard.snapshot(&id).await?;
+                Ok::<_, SheetahError>((id, cells))
+            }
+            .await;
+
+            this.update(cx, |this, cx| {
+                match result {
+                    Ok((id, cells)) => {
+                        this.table_id = Some(id);
+                        this.cells = cells;
+                        this.status = "ready".to_string();
+                    }
+                    Err(error) => this.status = format!("error: {error}"),
+                }
                 cx.notify();
             })
             .ok();
         })
+        .detach();
+
+        Self {
+            backend,
+            table_id: None,
+            cells: vec![vec![String::new(); 4]; 4],
+            selected: (0, 0),
+            draft: String::new(),
+            editing: false,
+            status: "loading".to_string(),
+            next_field_id: 100,
+            focus_handle: cx.focus_handle(),
+        }
     }
 
-    fn reload(&self, cx: &mut Context<Self>) {
+    fn current_cell(&self) -> &str {
+        self.cells
+            .get(self.selected.1 as usize)
+            .and_then(|row| row.get(self.selected.0 as usize))
+            .map(String::as_str)
+            .unwrap_or_default()
+    }
+
+    fn handle_key(&mut self, event: &KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>) {
+        match event.keystroke.key.as_str() {
+            "enter" => {
+                if self.editing {
+                    self.commit_edit(cx);
+                    return;
+                }
+                self.editing = true;
+                self.draft = self.current_cell().to_string();
+            }
+            "escape" => {
+                self.editing = false;
+                self.draft.clear();
+            }
+            "backspace" if self.editing => {
+                self.draft.pop();
+            }
+            "up" => self.move_selection(0, -1),
+            "down" => self.move_selection(0, 1),
+            "left" => self.move_selection(-1, 0),
+            "right" => self.move_selection(1, 0),
+            key if self.editing => {
+                let character = event.keystroke.key_char.as_deref().unwrap_or(key);
+                if character.chars().count() == 1 {
+                    self.draft.push_str(character);
+                }
+            }
+            _ => {}
+        }
+        cx.notify();
+    }
+
+    fn move_selection(&mut self, column_delta: i32, row_delta: i32) {
+        let columns = self.cells.first().map_or(0, Vec::len) as i32;
+        let rows = self.cells.len() as i32;
+        let column = (self.selected.0 as i32 + column_delta).clamp(0, columns.saturating_sub(1));
+        let row = (self.selected.1 as i32 + row_delta).clamp(0, rows.saturating_sub(1));
+        self.selected = (column as u32, row as u32);
+        self.editing = false;
+        self.draft.clear();
+    }
+
+    fn commit_edit(&mut self, cx: &mut Context<Self>) {
+        let Some(id) = self.table_id else {
+            return;
+        };
+        let (column, row) = self.selected;
+        let text = self.draft.clone();
+        let backend = self.backend.clone();
+
         cx.spawn(async move |this, cx| {
-            // Simulate reloading data in the background
-            this.update(cx, |counter, cx| {
-                counter.count += 50;
+            let result = async {
+                let value = parse_value(&text);
+                let display = value.to_text();
+                let mut guard = backend.write().await;
+                guard
+                    .set_data(
+                        id,
+                        &Pos {
+                            column: Index::new(column),
+                            row: Index::new(row),
+                        },
+                        Values2D::new(Index::new(1), Index::new(1), vec![value])?,
+                    )
+                    .await?;
+                guard.flush().await?;
+                Ok::<_, SheetahError>(display)
+            }
+            .await;
+
+            this.update(cx, |this, cx| {
+                match result {
+                    Ok(display) => {
+                        if let Some(cell) = this
+                            .cells
+                            .get_mut(row as usize)
+                            .and_then(|cells| cells.get_mut(column as usize))
+                        {
+                            *cell = display;
+                        }
+                        this.status = "saved".to_string();
+                    }
+                    Err(error) => this.status = format!("error: {error}"),
+                }
+                this.editing = false;
+                this.draft.clear();
                 cx.notify();
             })
             .ok();
         })
         .detach();
     }
+
+    fn add_row(&mut self, _event: &ClickEvent, _window: &mut Window, cx: &mut Context<Self>) {
+        let Some(id) = self.table_id else {
+            return;
+        };
+        let columns = self.cells.first().map_or(0, Vec::len) as u32;
+        let row_index = self.cells.len() as u32;
+        let field_id = self.take_field_id();
+        let row: Values = (0..columns)
+            .map(|_| Box::new(String::new()) as Box<dyn Value>)
+            .collect();
+        let backend = self.backend.clone();
+
+        cx.spawn(async move |this, cx| {
+            let result = async {
+                let mut guard = backend.write().await;
+                guard
+                    .add_row(id, field_id, Index::new(row_index), row)
+                    .await?;
+                guard.flush().await?;
+                Ok::<_, SheetahError>(())
+            }
+            .await;
+
+            this.update(cx, |this, cx| {
+                match result {
+                    Ok(()) => {
+                        this.cells.push(vec![String::new(); columns as usize]);
+                        this.status = "saved".to_string();
+                    }
+                    Err(error) => this.status = format!("error: {error}"),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn add_column(&mut self, _event: &ClickEvent, _window: &mut Window, cx: &mut Context<Self>) {
+        let Some(id) = self.table_id else {
+            return;
+        };
+        let rows = self.cells.len() as u32;
+        let column_index = self.cells.first().map_or(0, Vec::len) as u32;
+        let field_id = self.take_field_id();
+        let column: Values = (0..rows)
+            .map(|_| Box::new(String::new()) as Box<dyn Value>)
+            .collect();
+        let backend = self.backend.clone();
+
+        cx.spawn(async move |this, cx| {
+            let result = async {
+                let mut guard = backend.write().await;
+                guard
+                    .add_column(id, field_id, Index::new(column_index), column)
+                    .await?;
+                guard.flush().await?;
+                Ok::<_, SheetahError>(())
+            }
+            .await;
+
+            this.update(cx, |this, cx| {
+                match result {
+                    Ok(()) => {
+                        for row in &mut this.cells {
+                            row.push(String::new());
+                        }
+                        this.status = "saved".to_string();
+                    }
+                    Err(error) => this.status = format!("error: {error}"),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn save(&mut self, _event: &ClickEvent, _window: &mut Window, cx: &mut Context<Self>) {
+        let backend = self.backend.clone();
+        cx.spawn(async move |this, cx| {
+            let result = async {
+                backend.write().await.flush().await?;
+                Ok::<_, SheetahError>(())
+            }
+            .await;
+
+            this.update(cx, |this, cx| {
+                this.status = match result {
+                    Ok(()) => "saved".to_string(),
+                    Err(error) => format!("error: {error}"),
+                };
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn take_field_id(&mut self) -> u32 {
+        let id = self.next_field_id;
+        self.next_field_id += 1;
+        id
+    }
 }
 
-impl Focusable for Counter {
+impl Focusable for Spreadsheet {
     fn focus_handle(&self, _cx: &App) -> FocusHandle {
         self.focus_handle.clone()
     }
 }
 
-impl Render for Counter {
+impl Render for Spreadsheet {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let columns = self.cells.first().map_or(0, Vec::len);
+        let mut cells: Vec<Stateful<Div>> = Vec::new();
+        for (row, values) in self.cells.iter().enumerate() {
+            for (column, value) in values.iter().enumerate() {
+                let selected = self.selected == (column as u32, row as u32);
+                let text = if selected && self.editing {
+                    self.draft.clone()
+                } else {
+                    value.clone()
+                };
+                let listener = cx.listener(move |this: &mut Self, _, _, cx| {
+                    this.selected = (column as u32, row as u32);
+                    this.editing = false;
+                    this.draft.clear();
+                    cx.notify();
+                });
+
+                let mut cell = div()
+                    .id(format!("cell-{column}-{row}"))
+                    .on_click(listener)
+                    .min_w(px(96.))
+                    .px_2()
+                    .py_1()
+                    .rounded_sm()
+                    .bg(rgb(0x313244))
+                    .child(text);
+                if selected {
+                    cell = cell.bg(rgb(0x585b70));
+                }
+                cells.push(cell);
+            }
+        }
+
         div()
-            .id("counter")
-            .key_context("Counter")
-            .on_action(cx.listener(Self::increment))
-            .on_action(cx.listener(Self::decrement))
+            .id("spreadsheet")
+            .key_context("Spreadsheet")
             .track_focus(&self.focus_handle)
+            .on_key_down(cx.listener(Self::handle_key))
             .flex()
             .flex_col()
-            .gap_4()
-            .bg(rgb(0x1e1e2e))
             .size_full()
-            .justify_center()
-            .items_center()
-            .child(
-                div()
-                    .text_3xl()
-                    .text_color(rgb(0xcdd6f4))
-                    .child(format!("{}", self.count)),
-            )
+            .gap_3()
+            .p_4()
+            .bg(rgb(0x1e1e2e))
+            .text_color(rgb(0xcdd6f4))
             .child(
                 div()
                     .flex()
                     .gap_2()
-                    .child(
-                        div()
-                            .id("decrement")
-                            .px_4()
-                            .py_2()
-                            .bg(rgb(0x313244))
-                            .hover(|s| s.bg(rgb(0x45475a)))
-                            .rounded_md()
-                            .cursor_pointer()
-                            .text_color(rgb(0xcdd6f4))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.decrement(&Decrement, window, cx)
-                            }))
-                            .child("−"),
-                    )
-                    .child(
-                        div()
-                            .id("increment")
-                            .px_4()
-                            .py_2()
-                            .bg(rgb(0x313244))
-                            .hover(|s| s.bg(rgb(0x45475a)))
-                            .rounded_md()
-                            .cursor_pointer()
-                            .text_color(rgb(0xcdd6f4))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.increment(&Increment, window, cx)
-                            }))
-                            .child("+"),
-                    ),
+                    .child(button("Add row", cx.listener(Self::add_row)))
+                    .child(button("Add column", cx.listener(Self::add_column)))
+                    .child(button("Save", cx.listener(Self::save))),
             )
+            .child(div().text_sm().child(self.status.clone()))
             .child(
                 div()
-                    .flex()
-                    .gap_2()
-                    .child(
-                        div()
-                            .id("load")
-                            .px_4()
-                            .py_2()
-                            .bg(rgb(0x313244))
-                            .hover(|s| s.bg(rgb(0x45475a)))
-                            .rounded_md()
-                            .cursor_pointer()
-                            .text_color(rgb(0xcdd6f4))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.load(cx).detach();
-                            }))
-                            .child("Load"),
-                    )
-                    .child(
-                        div()
-                            .id("reload")
-                            .px_4()
-                            .py_2()
-                            .bg(rgb(0x313244))
-                            .hover(|s| s.bg(rgb(0x45475a)))
-                            .rounded_md()
-                            .cursor_pointer()
-                            .text_color(rgb(0xcdd6f4))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.reload(cx);
-                            }))
-                            .child("Reload"),
-                    ),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(rgb(0x6c7086))
-                    .child("Press ↑/↓ or click buttons"),
+                    .grid()
+                    .grid_cols(columns.max(1) as u16)
+                    .gap_1()
+                    .children(cells),
             )
     }
 }
 
-fn run_example() {
+fn button(
+    label: &'static str,
+    listener: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(label)
+        .px_3()
+        .py_1()
+        .rounded_md()
+        .bg(rgb(0x313244))
+        .hover(|style| style.bg(rgb(0x45475a)))
+        .cursor_pointer()
+        .on_click(listener)
+        .child(label)
+}
+
+fn seed_table() -> Result<Table> {
+    let mut table = Table::named(TableName {
+        name: Some("Sheet1".to_string()),
+        clash: 0,
+    });
+    for id in 1..=4 {
+        table.shape.columns.add(None, id)?;
+        table.shape.rows.add(None, id)?;
+    }
+    Ok(table)
+}
+
+fn parse_value(text: &str) -> Box<dyn Value> {
+    match text.parse::<i32>() {
+        Ok(number) => Box::new(number),
+        Err(_) => Box::new(text.to_string()),
+    }
+}
+
+fn run_app() {
     application().run(|cx| {
         if !fonts::load_fonts(&*cx) {
             return;
         }
-        cx.bind_keys([
-            gpui::KeyBinding::new("up", Increment, Some("Counter")),
-            gpui::KeyBinding::new("down", Decrement, Some("Counter")),
-        ]);
 
-        let bounds = Bounds::centered(None, size(px(300.), px(200.)), cx);
+        let bounds = Bounds::centered(None, size(px(720.), px(480.)), cx);
         cx.open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 ..Default::default()
             },
             |window, cx| {
-                let counter = cx.new(Counter::new);
-                counter.focus_handle(cx).focus(window, cx);
-                counter
+                let spreadsheet = cx.new(Spreadsheet::new);
+                spreadsheet.focus_handle(cx).focus(window, cx);
+                spreadsheet
             },
         )
         .unwrap();
@@ -210,351 +423,30 @@ fn run_example() {
 
 #[cfg(not(target_family = "wasm"))]
 fn main() {
-    run_example();
+    run_app();
 }
 
 #[cfg(target_family = "wasm")]
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn start() {
     gpui_platform::web_init();
-    run_example();
+    run_app();
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gpui::{TestAppContext, VisualTestContext};
-    use rand::prelude::*;
 
-    /// Here's a basic GPUI test. Just add the macro and take a TestAppContext as an argument!
-    ///
-    /// Note that synchronous side effects run immediately after your "update*" calls complete.
-    #[gpui::test]
-    fn basic_testing(cx: &mut TestAppContext) {
-        let counter = cx.new(|cx| Counter::new(cx));
-
-        counter.update(cx, |counter, _| {
-            counter.count = 42;
-        });
-
-        // Note that TestAppContext doesn't support `read(cx)`
-        let updated = counter.read_with(cx, |counter, _| counter.count);
-        assert_eq!(updated, 42);
-
-        // Emit an event - the subscriber will run immediately after the update finishes
-        counter.update(cx, |_, cx| {
-            cx.emit(CounterEvent);
-        });
-
-        let count_after_update = counter.read_with(cx, |counter, _| counter.count);
-        assert_eq!(
-            count_after_update, 999,
-            "Side effects should run after update completes"
-        );
+    #[test]
+    fn parse_value_prefers_numbers() {
+        assert_eq!(parse_value("42").to_text(), "42");
+        assert_eq!(parse_value("hello").to_text(), "hello");
     }
 
-    /// Tests which involve the window require you to construct a VisualTestContext.
-    /// Just like synchronous side effects, the window will be drawn after every "update*"
-    /// call, so you can test render-dependent behavior.
-    #[gpui::test]
-    fn test_counter_in_window(cx: &mut TestAppContext) {
-        let window = cx.update(|cx| {
-            cx.open_window(Default::default(), |_, cx| cx.new(|cx| Counter::new(cx)))
-                .unwrap()
-        });
-
-        let mut cx = VisualTestContext::from_window(window.into(), cx);
-        let counter = window.root(&mut cx).unwrap();
-
-        // Action dispatch depends on the element tree to resolve which action handler
-        // to call, and this works exactly as you'd expect in a test.
-        let focus_handle = counter.read_with(&cx, |counter, _| counter.focus_handle.clone());
-        cx.update(|window, cx| {
-            focus_handle.dispatch_action(&Increment, window, cx);
-        });
-
-        let count_after = counter.read_with(&cx, |counter, _| counter.count);
-        assert_eq!(
-            count_after, 1,
-            "Action dispatched via focus handle should increment"
-        );
-    }
-
-    /// GPUI tests can also be async, simply add the async keyword before the test.
-    /// Note that the test executor is single thread, so async side effects (including
-    /// background tasks) won't run until you explicitly yield control.
-    #[gpui::test]
-    async fn test_async_operations(cx: &mut TestAppContext) {
-        let counter = cx.new(|cx| Counter::new(cx));
-
-        // Tasks can be awaited directly
-        counter.update(cx, |counter, cx| counter.load(cx)).await;
-
-        let count = counter.read_with(cx, |counter, _| counter.count);
-        assert_eq!(count, 100, "Load task should have set count to 100");
-
-        // But side effects don't run until you yield control
-        counter.update(cx, |counter, cx| counter.reload(cx));
-
-        let count = counter.read_with(cx, |counter, _| counter.count);
-        assert_eq!(count, 100, "Detached reload task shouldn't have run yet");
-
-        // This runs all pending tasks
-        cx.run_until_parked();
-
-        let count = counter.read_with(cx, |counter, _| counter.count);
-        assert_eq!(count, 150, "Reload task should have run after parking");
-    }
-
-    /// Note that the test executor panics if you await a future that waits on
-    /// something outside GPUI's control, like a reading a file or network IO.
-    /// You should mock external systems where possible, as this feature can be used
-    /// to detect potential deadlocks in your async code.
-    ///
-    /// However, if you want to disable this check use `allow_parking()`
-    #[gpui::test]
-    async fn test_allow_parking(cx: &mut TestAppContext) {
-        // Allow the thread to park
-        cx.executor().allow_parking();
-
-        // Simulate an external system (like a file system) with an OS thread
-        let (tx, rx) = futures::channel::oneshot::channel();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(5));
-            tx.send(42).ok();
-        });
-
-        // Without allow_parking(), this await would panic because GPUI's
-        // scheduler runs out of tasks while waiting for the external thread.
-        let result = rx.await.unwrap();
-        assert_eq!(result, 42);
-    }
-
-    /// GPUI also provides support for property testing, via the iterations flag
-    #[gpui::test(iterations = 10)]
-    fn test_counter_random_operations(cx: &mut TestAppContext, mut rng: StdRng) {
-        let window = cx.update(|cx| {
-            cx.open_window(Default::default(), |_, cx| cx.new(|cx| Counter::new(cx)))
-                .unwrap()
-        });
-        let mut cx = VisualTestContext::from_window(window.into(), cx);
-
-        let counter = cx.new(|cx| Counter::new(cx));
-
-        // Perform random increments/decrements
-        let mut expected = 0i32;
-        for _ in 0..100 {
-            if rng.random_bool(0.5) {
-                expected += 1;
-                counter.update_in(&mut cx, |counter, window, cx| {
-                    counter.increment(&Increment, window, cx)
-                });
-            } else {
-                expected -= 1;
-                counter.update_in(&mut cx, |counter, window, cx| {
-                    counter.decrement(&Decrement, window, cx)
-                });
-            }
-        }
-
-        let actual = counter.read_with(&cx, |counter, _| counter.count);
-        assert_eq!(
-            actual, expected,
-            "Counter should match expected after random ops"
-        );
-    }
-
-    /// Now, all of those tests are good, but GPUI also provides strong support for testing distributed systems.
-    /// Let's setup a mock network and enhance the counter to send messages over it.
-    mod distributed_systems {
-        use std::sync::{Arc, Mutex};
-
-        /// The state of the mock network.
-        struct MockNetworkState {
-            ordering: Vec<i32>,
-            a_to_b: Vec<i32>,
-            b_to_a: Vec<i32>,
-        }
-
-        /// A mock network that delivers messages between two peers.
-        #[derive(Clone)]
-        struct MockNetwork {
-            state: Arc<Mutex<MockNetworkState>>,
-        }
-
-        impl MockNetwork {
-            fn new() -> Self {
-                Self {
-                    state: Arc::new(Mutex::new(MockNetworkState {
-                        ordering: Vec::new(),
-                        a_to_b: Vec::new(),
-                        b_to_a: Vec::new(),
-                    })),
-                }
-            }
-
-            fn a_client(&self) -> NetworkClient {
-                NetworkClient {
-                    network: self.clone(),
-                    is_a: true,
-                }
-            }
-
-            fn b_client(&self) -> NetworkClient {
-                NetworkClient {
-                    network: self.clone(),
-                    is_a: false,
-                }
-            }
-        }
-
-        /// A client handle for sending/receiving messages over the mock network.
-        #[derive(Clone)]
-        struct NetworkClient {
-            network: MockNetwork,
-            is_a: bool,
-        }
-
-        // See, networking is easy!
-        impl NetworkClient {
-            fn send(&self, value: i32) {
-                let mut network = self.network.state.lock().unwrap();
-                network.ordering.push(value);
-                if self.is_a {
-                    network.b_to_a.push(value);
-                } else {
-                    network.a_to_b.push(value);
-                }
-            }
-
-            fn receive_all(&self) -> Vec<i32> {
-                let mut network = self.network.state.lock().unwrap();
-                if self.is_a {
-                    network.a_to_b.drain(..).collect()
-                } else {
-                    network.b_to_a.drain(..).collect()
-                }
-            }
-        }
-
-        use gpui::Context;
-
-        /// A networked counter that can send/receive over a mock network.
-        struct NetworkedCounter {
-            count: i32,
-            client: NetworkClient,
-        }
-
-        impl NetworkedCounter {
-            fn new(client: NetworkClient) -> Self {
-                Self { count: 0, client }
-            }
-
-            /// Increment the counter and broadcast the change.
-            fn increment(&mut self, delta: i32, cx: &mut Context<Self>) {
-                self.count += delta;
-
-                cx.background_spawn({
-                    let client = self.client.clone();
-                    async move {
-                        client.send(delta);
-                    }
-                })
-                .detach();
-            }
-
-            /// Process incoming increment requests.
-            fn sync(&mut self) {
-                for delta in self.client.receive_all() {
-                    self.count += delta;
-                }
-            }
-        }
-
-        use super::*;
-
-        /// You can simulate distributed systems with multiple app contexts, simply by adding
-        /// additional parameters.
-        #[gpui::test]
-        fn test_app_sync(cx_a: &mut TestAppContext, cx_b: &mut TestAppContext) {
-            let network = MockNetwork::new();
-
-            let a = cx_a.new(|_| NetworkedCounter::new(network.a_client()));
-            let b = cx_b.new(|_| NetworkedCounter::new(network.b_client()));
-
-            // B increments locally and broadcasts the delta
-            b.update(cx_b, |b, cx| b.increment(42, cx));
-            b.read_with(cx_b, |b, _| assert_eq!(b.count, 42)); // B's count is set immediately
-            a.read_with(cx_a, |a, _| assert_eq!(a.count, 0)); // A's count is in a side effect
-
-            cx_b.run_until_parked(); // Send the delta from B
-            a.update(cx_a, |a, _| a.sync()); // Receive the delta at A
-
-            b.read_with(cx_b, |b, _| assert_eq!(b.count, 42)); // Both counts now match
-            a.read_with(cx_a, |a, _| assert_eq!(a.count, 42));
-        }
-
-        /// Multiple apps can run concurrently, and to capture this each test app shares
-        /// a dispatcher. Whenever you call `run_until_parked`, the dispatcher will randomly
-        /// pick which app's tasks to run next. This allows you to test that your distributed code
-        /// is robust to different execution orderings.
-        #[gpui::test(iterations = 10)]
-        fn test_random_interleaving(
-            cx_a: &mut TestAppContext,
-            cx_b: &mut TestAppContext,
-            mut rng: StdRng,
-        ) {
-            let network = MockNetwork::new();
-
-            // Track execution order
-            let mut original_order = Vec::new();
-            let a = cx_a.new(|_| NetworkedCounter::new(MockNetwork::a_client(&network)));
-            let b = cx_b.new(|_| NetworkedCounter::new(MockNetwork::b_client(&network)));
-
-            let num_operations: usize = rng.random_range(3..8);
-
-            for i in 0..num_operations {
-                let i = i as i32;
-                let which = rng.random_bool(0.5);
-
-                original_order.push(i);
-                if which {
-                    b.update(cx_b, |b, cx| b.increment(i, cx));
-                } else {
-                    a.update(cx_a, |a, cx| a.increment(i, cx));
-                }
-            }
-
-            // This will send all of the pending increment messages, from both a and b
-            cx_a.run_until_parked();
-
-            a.update(cx_a, |a, _| a.sync());
-            b.update(cx_b, |b, _| b.sync());
-
-            let a_count = a.read_with(cx_a, |a, _| a.count);
-            let b_count = b.read_with(cx_b, |b, _| b.count);
-
-            assert_eq!(a_count, b_count, "A and B should have the same count");
-
-            // Nicely format the execution order output.
-            // Run this test with `-- --nocapture` to see it!
-            let actual = network.state.lock().unwrap().ordering.clone();
-            let spawned: Vec<_> = original_order.iter().map(|n| format!("{}", n)).collect();
-            let ran: Vec<_> = actual.iter().map(|n| format!("{}", n)).collect();
-            let diff: Vec<_> = original_order
-                .iter()
-                .zip(actual.iter())
-                .map(|(o, a)| {
-                    if o == a {
-                        " ".to_string()
-                    } else {
-                        "^".to_string()
-                    }
-                })
-                .collect();
-            println!("spawned: [{}]", spawned.join(", "));
-            println!("ran:     [{}]", ran.join(", "));
-            println!("         [{}]", diff.join(", "));
-        }
+    #[test]
+    fn seed_table_has_a_four_by_four_grid() {
+        let table = seed_table().unwrap();
+        assert_eq!(table.dims().column.raw(), 4);
+        assert_eq!(table.dims().row.raw(), 4);
     }
 }

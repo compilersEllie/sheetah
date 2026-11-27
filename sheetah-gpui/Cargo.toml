@@ -7,6 +7,8 @@ edition = "2021"
 futures = "0.3.34"
 gpui = { package = "gpui-fast", version = "0.1.0" }
 gpui_platform = { package = "gpui-fast-platform", version = "0.1.0", features = ["wayland"] }
+sheetah-model = { path = "../sheetah-model" }
+tokio = { version = "1.53.3", features = ["sync"] }
 
 [dev-dependencies]
 gpui_platform = { package = "gpui-fast-platform", version = "0.1.0", features = ["wayland", "test-support"] }

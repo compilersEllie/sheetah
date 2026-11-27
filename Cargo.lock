@@ -5284,6 +5284,8 @@ dependencies = [
  "gpui-fast",
  "gpui-fast-platform",
  "rand 0.10.4",
+ "sheetah-model",
+ "tokio",
 ]
 
 [[package]]
