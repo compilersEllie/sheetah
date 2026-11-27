@@ -53,15 +53,18 @@ impl Spreadsheet {
                     }
                 };
                 let cells = guard.snapshot(&id).await?;
-                Ok::<_, SheetahError>((id, cells))
+                let dims = guard.get(&id).await?.dims();
+                Ok::<_, SheetahError>((id, cells, dims))
             }
             .await;
 
             this.update(cx, |this, cx| {
                 match result {
-                    Ok((id, cells)) => {
+                    Ok((id, cells, dims)) => {
                         this.table_id = Some(id);
                         this.cells = cells;
+                        this.next_field_id =
+                            dims.column.raw().max(dims.row.raw()).saturating_add(1);
                         this.status = "ready".to_string();
                     }
                     Err(error) => this.status = format!("error: {error}"),
