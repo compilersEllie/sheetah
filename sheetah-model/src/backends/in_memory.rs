@@ -94,13 +94,20 @@ impl Backend for InMemoryBackend {
     }
 
     async fn rename_table(&mut self, table_id: TableId, name: String) -> Result<()> {
-        let proposed = TableName {
-            name: Some(name),
+        let existing = self
+            .tables
+            .get(&table_id)
+            .ok_or(SheetahError::TableNotFound(table_id))?;
+        let mut proposed = existing.name.clone().unwrap_or(TableName {
+            name: None,
             clash: 0,
-        };
-        if self.tables.iter().any(|(id, table)| {
-            *id != table_id && table.display_name() == proposed.display_name()
-        }) {
+        });
+        proposed.name = Some(name);
+        if self
+            .tables
+            .iter()
+            .any(|(id, table)| *id != table_id && table.display_name() == proposed.display_name())
+        {
             return Err(SheetahError::DuplicateTable(Some(proposed)));
         }
         let table = self
@@ -379,7 +386,7 @@ mod tests {
                 first_id,
                 Table::named(TableName {
                     name: Some("Sheet1".to_string()),
-                    clash: 0,
+                    clash: 3,
                 }),
             )
             .await?;
@@ -395,6 +402,16 @@ mod tests {
 
         backend.rename_table(first_id, "Budget".to_string()).await?;
         assert_eq!(backend.get(&first_id).await?.display_name(), "Budget");
+        assert_eq!(
+            backend
+                .get(&first_id)
+                .await?
+                .name
+                .as_ref()
+                .expect("named table")
+                .clash,
+            3
+        );
         assert_eq!(
             backend.list_tables().await?,
             vec![
@@ -412,6 +429,11 @@ mod tests {
         let duplicate = backend.rename_table(first_id, "Sheet2".to_string()).await;
         assert!(matches!(duplicate, Err(SheetahError::DuplicateTable(_))));
         assert_eq!(backend.get(&first_id).await?.display_name(), "Budget");
+
+        let missing = backend
+            .rename_table(TableId::new(99), "Sheet2".to_string())
+            .await;
+        assert!(matches!(missing, Err(SheetahError::TableNotFound(_))));
         Ok(())
     }
 

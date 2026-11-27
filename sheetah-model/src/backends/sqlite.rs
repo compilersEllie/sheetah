@@ -91,11 +91,11 @@ impl SqliteBackend {
             .optional()
             .map_err(|error| backend_error("read active table", error))?;
         match value {
-            Some(value) => Ok(Some(TableId::new(
-                value
-                    .parse()
-                    .map_err(|error| backend_error("parse active table id", error))?,
-            ))),
+            Some(value) => {
+                Ok(Some(TableId::new(value.parse().map_err(|error| {
+                    backend_error("parse active table id", error)
+                })?)))
+            }
             None => Ok(None),
         }
     }
@@ -120,10 +120,7 @@ impl SqliteBackend {
             }
             None => {
                 sqlite
-                    .execute(
-                        "DELETE FROM meta WHERE key = ?",
-                        params![ACTIVE_TABLE_KEY],
-                    )
+                    .execute("DELETE FROM meta WHERE key = ?", params![ACTIVE_TABLE_KEY])
                     .map_err(|error| backend_error("clear active table", error))?;
             }
         }
@@ -527,6 +524,45 @@ mod tests {
             ]
         );
         assert_eq!(reloaded.snapshot(&first_id).await?.len(), 2);
+
+        reloaded.destroy().await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn sqlite_backend_rejects_duplicate_rename() -> Result<()> {
+        let path = test_path("duplicate");
+        let _ = std::fs::remove_file(&path);
+
+        let mut backend = SqliteBackend::new(options(&path));
+        backend.setup().await?;
+        let first = sheet("Sheet1")?;
+        let first_id = first.id();
+        let second = sheet("Sheet2")?;
+        let second_id = second.id();
+        backend.insert(first_id, first).await?;
+        backend.insert(second_id, second).await?;
+
+        let duplicate = backend.rename_table(first_id, "Sheet2".to_string()).await;
+        assert!(matches!(duplicate, Err(SheetahError::DuplicateTable(_))));
+        backend.flush().await?;
+        drop(backend);
+
+        let mut reloaded = SqliteBackend::new(options(&path));
+        reloaded.setup().await?;
+        assert_eq!(
+            reloaded.list_tables().await?,
+            vec![
+                TableSummary {
+                    id: first_id,
+                    name: "Sheet1".to_string(),
+                },
+                TableSummary {
+                    id: second_id,
+                    name: "Sheet2".to_string(),
+                },
+            ]
+        );
 
         reloaded.destroy().await?;
         Ok(())
