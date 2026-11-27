@@ -10,7 +10,7 @@ use gpui::{
     MAX_BUTTONS_PER_SIDE,
 };
 use gpui_platform::application;
-use sheetah_model::backend::{Backend, BackendOptions};
+use sheetah_model::backend::{Backend, BackendOptions, TableSummary};
 use sheetah_model::backends::sqlite::SqliteBackend;
 use sheetah_model::editor::{Index, Pos};
 use sheetah_model::error::{Result, SheetahError};
@@ -22,15 +22,48 @@ use tokio::sync::RwLock;
 
 struct Spreadsheet {
     backend: Arc<RwLock<SqliteBackend>>,
+    tables: Vec<TableSummary>,
     table_id: Option<TableId>,
     cells: Vec<Vec<String>>,
     selected: (u32, u32),
     draft: String,
     editing: bool,
+    rename_draft: String,
+    renaming: bool,
+    pending_delete: Option<TableId>,
     status: String,
     next_field_id: u32,
     titlebar_drag_armed: bool,
     focus_handle: FocusHandle,
+    table_epoch: u64,
+    data_epoch: u64,
+    rename_epoch: u64,
+}
+
+struct LoadedTable {
+    id: TableId,
+    cells: Vec<Vec<String>>,
+    next_field_id: u32,
+}
+
+async fn load_table(backend: &SqliteBackend, id: TableId) -> Result<LoadedTable> {
+    let cells = backend.snapshot(&id).await?;
+    let table = backend.get(&id).await?;
+    let next_field_id = table
+        .shape
+        .columns
+        .order()
+        .iter()
+        .chain(table.shape.rows.order())
+        .copied()
+        .max()
+        .unwrap_or(0)
+        .saturating_add(1);
+    Ok(LoadedTable {
+        id,
+        cells,
+        next_field_id,
+    })
 }
 
 impl Spreadsheet {
@@ -46,7 +79,9 @@ impl Spreadsheet {
             let result = async {
                 let mut guard = startup_backend.write().await;
                 guard.setup().await?;
-                let id = match guard.table_ids().first().copied() {
+                let stored_tables = guard.list_tables().await?;
+                let active = guard.active_table().await?;
+                let id = match startup_table_id(active, &stored_tables) {
                     Some(id) => id,
                     None => {
                         let table = seed_table()?;
@@ -56,29 +91,18 @@ impl Spreadsheet {
                         id
                     }
                 };
-                let cells = guard.snapshot(&id).await?;
-                let table = guard.get(&id).await?;
-                let next_field_id = table
-                    .shape
-                    .columns
-                    .order()
-                    .iter()
-                    .chain(table.shape.rows.order())
-                    .copied()
-                    .max()
-                    .unwrap_or(0)
-                    .saturating_add(1);
-                Ok::<_, SheetahError>((id, cells, next_field_id))
+                let loaded = load_table(&guard, id).await?;
+                guard.set_active_table(Some(id)).await?;
+                let tables = guard.list_tables().await?;
+                Ok::<_, SheetahError>((tables, loaded))
             }
             .await;
 
             this.update(cx, |this, cx| {
                 match result {
-                    Ok((id, cells, next_field_id)) => {
-                        this.table_id = Some(id);
-                        this.cells = cells;
-                        this.next_field_id = next_field_id;
-                        this.status = "ready".to_string();
+                    Ok((tables, loaded)) => {
+                        this.tables = tables;
+                        this.apply_loaded(loaded, "ready");
                     }
                     Err(error) => this.status = format!("error: {error}"),
                 }
@@ -90,15 +114,22 @@ impl Spreadsheet {
 
         Self {
             backend,
+            tables: Vec::new(),
             table_id: None,
             cells: vec![vec![String::new(); 4]; 4],
             selected: (0, 0),
             draft: String::new(),
             editing: false,
+            rename_draft: String::new(),
+            renaming: false,
+            pending_delete: None,
             status: "loading".to_string(),
             next_field_id: 100,
             titlebar_drag_armed: false,
             focus_handle: cx.focus_handle(),
+            table_epoch: 0,
+            data_epoch: 0,
+            rename_epoch: 0,
         }
     }
 
@@ -110,9 +141,259 @@ impl Spreadsheet {
             .unwrap_or_default()
     }
 
+    fn apply_loaded(&mut self, loaded: LoadedTable, status: &str) {
+        self.table_id = Some(loaded.id);
+        self.cells = loaded.cells;
+        self.next_field_id = loaded.next_field_id;
+        self.selected = (0, 0);
+        self.draft.clear();
+        self.editing = false;
+        self.rename_draft.clear();
+        self.renaming = false;
+        self.pending_delete = None;
+        self.data_epoch += 1;
+        self.rename_epoch += 1;
+        self.status = status.to_string();
+    }
+
+    fn active_table_name(&self) -> &str {
+        self.tables
+            .iter()
+            .find(|table| Some(table.id) == self.table_id)
+            .map_or("Untitled", |table| table.name.as_str())
+    }
+
+    fn select_table(&mut self, id: TableId, cx: &mut Context<Self>) {
+        if Some(id) == self.table_id || self.table_id.is_none() {
+            return;
+        }
+        let backend = self.backend.clone();
+        self.table_epoch += 1;
+        let table_epoch = self.table_epoch;
+        self.status = "loading".to_string();
+
+        cx.spawn(async move |this, cx| {
+            let result = async {
+                let mut guard = backend.write().await;
+                let loaded = load_table(&guard, id).await?;
+                guard.set_active_table(Some(id)).await?;
+                Ok::<_, SheetahError>(loaded)
+            }
+            .await;
+
+            this.update(cx, |this, cx| {
+                if this.table_epoch != table_epoch {
+                    return;
+                }
+                match result {
+                    Ok(loaded) => this.apply_loaded(loaded, "ready"),
+                    Err(error) => this.status = format!("error: {error}"),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn create_table(&mut self, _: &ClickEvent, _: &mut Window, cx: &mut Context<Self>) {
+        if self.table_id.is_none() {
+            return;
+        }
+        let backend = self.backend.clone();
+        self.table_epoch += 1;
+        let table_epoch = self.table_epoch;
+        self.status = "loading".to_string();
+
+        cx.spawn(async move |this, cx| {
+            let result = async {
+                let mut guard = backend.write().await;
+                let name = next_table_name(&guard.list_tables().await?);
+                let table = new_table(&name)?;
+                let id = table.id();
+                guard.insert(id, table).await?;
+                guard.flush().await?;
+                guard.set_active_table(Some(id)).await?;
+                let loaded = load_table(&guard, id).await?;
+                let tables = guard.list_tables().await?;
+                Ok::<_, SheetahError>((tables, loaded))
+            }
+            .await;
+
+            this.update(cx, |this, cx| {
+                if this.table_epoch != table_epoch {
+                    return;
+                }
+                match result {
+                    Ok((tables, loaded)) => {
+                        this.tables = tables;
+                        this.apply_loaded(loaded, "saved");
+                    }
+                    Err(error) => this.status = format!("error: {error}"),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn begin_rename(&mut self, _: &ClickEvent, _: &mut Window, cx: &mut Context<Self>) {
+        if self.table_id.is_none() {
+            return;
+        }
+        self.rename_epoch += 1;
+        self.renaming = true;
+        self.rename_draft = self.active_table_name().to_string();
+        self.editing = false;
+        self.draft.clear();
+        cx.notify();
+    }
+
+    fn commit_rename(&mut self, cx: &mut Context<Self>) {
+        let Some(id) = self.table_id else {
+            return;
+        };
+        let name = self.rename_draft.trim().to_string();
+        if !is_valid_table_name(&name) {
+            self.status = "error: table name cannot be empty".to_string();
+            cx.notify();
+            return;
+        }
+        let backend = self.backend.clone();
+        let rename_epoch = self.rename_epoch;
+        self.status = "loading".to_string();
+
+        cx.spawn(async move |this, cx| {
+            let result = async {
+                let mut guard = backend.write().await;
+                guard.rename_table(id, name).await?;
+                guard.flush().await?;
+                guard.list_tables().await
+            }
+            .await;
+
+            this.update(cx, |this, cx| {
+                if this.rename_epoch != rename_epoch || this.table_id != Some(id) {
+                    return;
+                }
+                match result {
+                    Ok(tables) => {
+                        this.tables = tables;
+                        this.renaming = false;
+                        this.rename_draft.clear();
+                        this.status = "saved".to_string();
+                    }
+                    Err(error) => this.status = rename_error_status(&error),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn request_delete(&mut self, id: TableId) {
+        if self.table_id.is_some() {
+            self.pending_delete = Some(id);
+        }
+    }
+
+    fn cancel_delete(&mut self, _: &ClickEvent, _: &mut Window, cx: &mut Context<Self>) {
+        self.pending_delete = None;
+        cx.notify();
+    }
+
+    fn confirm_delete(&mut self, id: TableId, cx: &mut Context<Self>) {
+        let Some(active_id) = self.table_id else {
+            return;
+        };
+        let backend = self.backend.clone();
+        self.table_epoch += 1;
+        let table_epoch = self.table_epoch;
+        self.pending_delete = None;
+        self.status = "loading".to_string();
+
+        cx.spawn(async move |this, cx| {
+            let result = async {
+                let mut guard = backend.write().await;
+                guard.remove_table(id).await?;
+                let mut tables = guard.list_tables().await?;
+                let preferred = guard
+                    .active_table()
+                    .await?
+                    .filter(|stored| tables.iter().any(|table| table.id == *stored))
+                    .or_else(|| {
+                        tables
+                            .iter()
+                            .any(|table| table.id == active_id)
+                            .then_some(active_id)
+                    });
+                let next_id = match preferred.or_else(|| tables.first().map(|table| table.id)) {
+                    Some(id) => id,
+                    None => {
+                        let table = new_table("Sheet1")?;
+                        let id = table.id();
+                        guard.insert(id, table).await?;
+                        tables = guard.list_tables().await?;
+                        id
+                    }
+                };
+                guard.flush().await?;
+                guard.set_active_table(Some(next_id)).await?;
+                let loaded = load_table(&guard, next_id).await?;
+                Ok::<_, SheetahError>((tables, loaded))
+            }
+            .await;
+
+            this.update(cx, |this, cx| {
+                if this.table_epoch != table_epoch || this.table_id != Some(active_id) {
+                    return;
+                }
+                match result {
+                    Ok((tables, loaded)) => {
+                        this.tables = tables;
+                        this.apply_loaded(loaded, "saved");
+                    }
+                    Err(error) => this.status = format!("error: {error}"),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
+    }
+
     fn handle_key(&mut self, event: &KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>) {
         let modifiers = event.keystroke.modifiers;
         if modifiers.control || modifiers.alt || modifiers.platform || modifiers.function {
+            return;
+        }
+        if self.renaming {
+            match event.keystroke.key.as_str() {
+                "enter" => {
+                    self.commit_rename(cx);
+                    return;
+                }
+                "escape" => {
+                    self.renaming = false;
+                    self.rename_draft.clear();
+                }
+                "backspace" => {
+                    self.rename_draft.pop();
+                }
+                key => {
+                    let character = event.keystroke.key_char.as_deref().unwrap_or(key);
+                    if character.chars().count() == 1 {
+                        self.rename_draft.push_str(character);
+                    }
+                }
+            }
+            cx.notify();
             return;
         }
         if self.table_id.is_none() {
@@ -166,6 +447,7 @@ impl Spreadsheet {
         let (column, row) = self.selected;
         let text = self.draft.clone();
         let backend = self.backend.clone();
+        let data_epoch = self.data_epoch;
 
         cx.spawn(async move |this, cx| {
             let result = async {
@@ -188,6 +470,9 @@ impl Spreadsheet {
             .await;
 
             this.update(cx, |this, cx| {
+                if this.table_id != Some(id) || this.data_epoch != data_epoch {
+                    return;
+                }
                 match result {
                     Ok(display) => {
                         if let Some(cell) = this
@@ -198,11 +483,11 @@ impl Spreadsheet {
                             *cell = display;
                         }
                         this.status = "saved".to_string();
+                        this.editing = false;
+                        this.draft.clear();
                     }
                     Err(error) => this.status = format!("error: {error}"),
                 }
-                this.editing = false;
-                this.draft.clear();
                 cx.notify();
             })
             .ok();
@@ -221,6 +506,7 @@ impl Spreadsheet {
             .map(|_| Box::new(String::new()) as Box<dyn Value>)
             .collect();
         let backend = self.backend.clone();
+        let data_epoch = self.data_epoch;
 
         cx.spawn(async move |this, cx| {
             let result = async {
@@ -234,6 +520,9 @@ impl Spreadsheet {
             .await;
 
             this.update(cx, |this, cx| {
+                if this.table_id != Some(id) || this.data_epoch != data_epoch {
+                    return;
+                }
                 match result {
                     Ok(()) => {
                         this.cells.push(vec![String::new(); columns as usize]);
@@ -259,6 +548,7 @@ impl Spreadsheet {
             .map(|_| Box::new(String::new()) as Box<dyn Value>)
             .collect();
         let backend = self.backend.clone();
+        let data_epoch = self.data_epoch;
 
         cx.spawn(async move |this, cx| {
             let result = async {
@@ -272,6 +562,9 @@ impl Spreadsheet {
             .await;
 
             this.update(cx, |this, cx| {
+                if this.table_id != Some(id) || this.data_epoch != data_epoch {
+                    return;
+                }
                 match result {
                     Ok(()) => {
                         for row in &mut this.cells {
@@ -357,6 +650,117 @@ impl Render for Spreadsheet {
             }
         }
 
+        let mut table_list = div()
+            .id("tables")
+            .w(px(180.))
+            .flex_shrink_0()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .p_3()
+            .bg(rgb(0x11111b))
+            .child(div().text_sm().child("Tables"))
+            .children(self.tables.iter().map(|table| {
+                let id = table.id;
+                let selected = Some(id) == self.table_id;
+                let mut item = div()
+                    .id(format!("table-{}", id.raw()))
+                    .px_2()
+                    .py_1()
+                    .rounded_md()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.select_table(id, cx);
+                    }))
+                    .child(table.name.clone());
+                item = if selected {
+                    item.bg(rgb(0x585b70))
+                } else {
+                    item.bg(rgb(0x313244))
+                        .hover(|style| style.bg(rgb(0x45475a)))
+                };
+                item
+            }))
+            .child(button("New table", cx.listener(Self::create_table)));
+        if self.table_id.is_some() {
+            table_list = table_list
+                .child(button("Rename", cx.listener(Self::begin_rename)))
+                .child(button(
+                    "Delete",
+                    cx.listener(|this: &mut Self, _, _, cx| {
+                        if let Some(id) = this.table_id {
+                            this.request_delete(id);
+                        }
+                        cx.notify();
+                    }),
+                ));
+        }
+        if self.renaming {
+            table_list = table_list.child(
+                div()
+                    .id("rename-draft")
+                    .px_2()
+                    .py_1()
+                    .rounded_sm()
+                    .bg(rgb(0x313244))
+                    .child(self.rename_draft.clone()),
+            );
+        }
+
+        let mut main = div()
+            .flex_1()
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .flex()
+                    .gap_2()
+                    .p_4()
+                    .pb_0()
+                    .child(button("Add row", cx.listener(Self::add_row)))
+                    .child(button("Add column", cx.listener(Self::add_column)))
+                    .child(button("Save", cx.listener(Self::save))),
+            )
+            .child(div().px_4().py_1().text_sm().child(format!(
+                "{} — {}",
+                self.active_table_name(),
+                self.status
+            )))
+            .child(
+                div()
+                    .flex_1()
+                    .grid()
+                    .grid_cols(columns.max(1) as u16)
+                    .gap_1()
+                    .px_4()
+                    .pb_4()
+                    .children(cells),
+            );
+        if let Some(id) = self.pending_delete {
+            let name = self
+                .tables
+                .iter()
+                .find(|table| table.id == id)
+                .map_or("this table", |table| table.name.as_str())
+                .to_string();
+            main = main.child(
+                div()
+                    .mx_4()
+                    .mb_2()
+                    .flex()
+                    .gap_2()
+                    .items_center()
+                    .rounded_md()
+                    .bg(rgb(0x6b1e2a))
+                    .p_3()
+                    .child(format!("Delete '{name}'?"))
+                    .child(button(
+                        "Confirm",
+                        cx.listener(move |this: &mut Self, _, _, cx| this.confirm_delete(id, cx)),
+                    ))
+                    .child(button("Cancel", cx.listener(Self::cancel_delete))),
+            );
+        }
+
         let mut root = div()
             .id("spreadsheet")
             .key_context("Spreadsheet")
@@ -370,36 +774,17 @@ impl Render for Spreadsheet {
             root = root.child(titlebar(window, cx));
         }
         root.bg(rgb(0x1e1e2e))
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .p_4()
-                    .pb_0()
-                    .child(button("Add row", cx.listener(Self::add_row)))
-                    .child(button("Add column", cx.listener(Self::add_column)))
-                    .child(button("Save", cx.listener(Self::save))),
-            )
-            .child(div().px_4().py_1().text_sm().child(self.status.clone()))
-            .child(
-                div()
-                    .flex_1()
-                    .grid()
-                    .grid_cols(columns.max(1) as u16)
-                    .gap_1()
-                    .px_4()
-                    .pb_4()
-                    .children(cells),
-            )
+            .child(div().flex().flex_1().child(table_list).child(main))
     }
 }
 
 fn button(
-    label: &'static str,
+    label: impl Into<String>,
     listener: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let label = label.into();
     div()
-        .id(label)
+        .id(label.clone())
         .px_3()
         .py_1()
         .rounded_md()
@@ -627,9 +1012,34 @@ fn button_glyph(button: WindowButton, expanded: bool) -> &'static str {
     }
 }
 
-fn seed_table() -> Result<Table> {
+fn is_valid_table_name(name: &str) -> bool {
+    !name.trim().is_empty()
+}
+
+fn startup_table_id(active: Option<TableId>, tables: &[TableSummary]) -> Option<TableId> {
+    active
+        .filter(|id| tables.iter().any(|table| table.id == *id))
+        .or_else(|| tables.first().map(|table| table.id))
+}
+
+fn rename_error_status(error: &SheetahError) -> String {
+    if matches!(error, SheetahError::DuplicateTable(_)) {
+        "error: a table with that name already exists".to_string()
+    } else {
+        format!("error: {error}")
+    }
+}
+
+fn next_table_name(tables: &[TableSummary]) -> String {
+    (1..)
+        .map(|index| format!("Sheet{index}"))
+        .find(|name| tables.iter().all(|table| table.name != *name))
+        .expect("table names are unbounded")
+}
+
+fn new_table(name: &str) -> Result<Table> {
     let mut table = Table::named(TableName {
-        name: Some("Sheet1".to_string()),
+        name: Some(name.to_string()),
         clash: 0,
     });
     for id in 1..=4 {
@@ -637,6 +1047,10 @@ fn seed_table() -> Result<Table> {
         table.shape.rows.add(None, id)?;
     }
     Ok(table)
+}
+
+fn seed_table() -> Result<Table> {
+    new_table("Sheet1")
 }
 
 fn parse_value(text: &str) -> Box<dyn Value> {
@@ -773,5 +1187,50 @@ mod tests {
             assert_eq!(action, TitlebarDoubleClick::Zoom);
             assert!(uses_explicit_titlebar_actions());
         }
+    }
+
+    fn summary(id: u128, name: &str) -> TableSummary {
+        TableSummary {
+            id: TableId::new(id),
+            name: name.to_string(),
+        }
+    }
+
+    #[test]
+    fn next_table_name_fills_first_available_slot() {
+        assert_eq!(next_table_name(&[]), "Sheet1");
+        let tables = vec![summary(1, "Sheet1"), summary(3, "Sheet3")];
+        assert_eq!(next_table_name(&tables), "Sheet2");
+    }
+
+    #[test]
+    fn startup_uses_valid_active_id_or_falls_back() {
+        let first = summary(1, "Sheet1");
+        let second = summary(2, "Sheet2");
+        let tables = vec![first.clone(), second.clone()];
+
+        assert_eq!(startup_table_id(Some(second.id), &tables), Some(second.id));
+        assert_eq!(
+            startup_table_id(Some(TableId::new(99)), &tables),
+            Some(first.id)
+        );
+        assert_eq!(startup_table_id(None, &tables), Some(first.id));
+        assert_eq!(startup_table_id(None, &[]), None);
+    }
+
+    #[test]
+    fn duplicate_rename_has_a_friendly_status() {
+        let error = SheetahError::DuplicateTable(None);
+        assert_eq!(
+            rename_error_status(&error),
+            "error: a table with that name already exists"
+        );
+    }
+
+    #[test]
+    fn table_name_must_have_visible_text() {
+        assert!(is_valid_table_name("Budget"));
+        assert!(!is_valid_table_name(""));
+        assert!(!is_valid_table_name("   "));
     }
 }
