@@ -53,18 +53,27 @@ impl Spreadsheet {
                     }
                 };
                 let cells = guard.snapshot(&id).await?;
-                let dims = guard.get(&id).await?.dims();
-                Ok::<_, SheetahError>((id, cells, dims))
+                let table = guard.get(&id).await?;
+                let next_field_id = table
+                    .shape
+                    .columns
+                    .order()
+                    .iter()
+                    .chain(table.shape.rows.order())
+                    .copied()
+                    .max()
+                    .unwrap_or(0)
+                    .saturating_add(1);
+                Ok::<_, SheetahError>((id, cells, next_field_id))
             }
             .await;
 
             this.update(cx, |this, cx| {
                 match result {
-                    Ok((id, cells, dims)) => {
+                    Ok((id, cells, next_field_id)) => {
                         this.table_id = Some(id);
                         this.cells = cells;
-                        this.next_field_id =
-                            dims.column.raw().max(dims.row.raw()).saturating_add(1);
+                        this.next_field_id = next_field_id;
                         this.status = "ready".to_string();
                     }
                     Err(error) => this.status = format!("error: {error}"),
@@ -97,6 +106,13 @@ impl Spreadsheet {
     }
 
     fn handle_key(&mut self, event: &KeyDownEvent, _window: &mut Window, cx: &mut Context<Self>) {
+        let modifiers = event.keystroke.modifiers;
+        if modifiers.control || modifiers.alt || modifiers.platform || modifiers.function {
+            return;
+        }
+        if self.table_id.is_none() {
+            return;
+        }
         match event.keystroke.key.as_str() {
             "enter" => {
                 if self.editing {
