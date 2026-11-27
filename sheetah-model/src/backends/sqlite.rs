@@ -1,4 +1,4 @@
-use crate::backend::{Backend, BackendKind, BackendOptions};
+use crate::backend::{Backend, BackendKind, BackendOptions, TableSummary};
 use crate::backends::in_memory::InMemoryBackend;
 use crate::editor::{Index, Pos, View};
 use crate::error::{Result, SheetahError};
@@ -6,7 +6,7 @@ use crate::shape::FieldId;
 use crate::table::{Table, TableId};
 use crate::value::{Value, Values, Values2D, Values2DRef};
 use async_trait::async_trait;
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -24,7 +24,13 @@ CREATE TABLE IF NOT EXISTS cells (
     value_json TEXT NOT NULL,
     PRIMARY KEY (table_id, row, col)
 );
+CREATE TABLE IF NOT EXISTS meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 ";
+
+const ACTIVE_TABLE_KEY: &str = "active_table";
 
 #[derive(Debug)]
 pub struct SqliteBackend {
@@ -67,6 +73,62 @@ impl SqliteBackend {
         }
         Ok(rows)
     }
+
+    pub async fn active_table(&self) -> Result<Option<TableId>> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| backend_error("lock sqlite connection", "poisoned lock"))?;
+        let sqlite = connection
+            .as_ref()
+            .ok_or_else(|| backend_error("read active table", "backend is not set up"))?;
+        let value: Option<String> = sqlite
+            .query_row(
+                "SELECT value FROM meta WHERE key = ?",
+                params![ACTIVE_TABLE_KEY],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| backend_error("read active table", error))?;
+        match value {
+            Some(value) => Ok(Some(TableId::new(
+                value
+                    .parse()
+                    .map_err(|error| backend_error("parse active table id", error))?,
+            ))),
+            None => Ok(None),
+        }
+    }
+
+    pub async fn set_active_table(&mut self, table_id: Option<TableId>) -> Result<()> {
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| backend_error("lock sqlite connection", "poisoned lock"))?;
+        let sqlite = connection
+            .as_mut()
+            .ok_or_else(|| backend_error("store active table", "backend is not set up"))?;
+        match table_id {
+            Some(id) => {
+                sqlite
+                    .execute(
+                        "INSERT INTO meta (key, value) VALUES (?, ?)
+                         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                        params![ACTIVE_TABLE_KEY, id.raw().to_string()],
+                    )
+                    .map_err(|error| backend_error("store active table", error))?;
+            }
+            None => {
+                sqlite
+                    .execute(
+                        "DELETE FROM meta WHERE key = ?",
+                        params![ACTIVE_TABLE_KEY],
+                    )
+                    .map_err(|error| backend_error("clear active table", error))?;
+            }
+        }
+        Ok(())
+    }
 }
 
 inventory::submit!(BackendKind {
@@ -94,6 +156,18 @@ impl Backend for SqliteBackend {
 
     async fn insert(&mut self, table_id: TableId, table: Table) -> Result<()> {
         self.memory.insert(table_id, table).await
+    }
+
+    async fn list_tables(&self) -> Result<Vec<TableSummary>> {
+        self.memory.list_tables().await
+    }
+
+    async fn rename_table(&mut self, table_id: TableId, name: String) -> Result<()> {
+        self.memory.rename_table(table_id, name).await
+    }
+
+    async fn remove_table(&mut self, table_id: TableId) -> Result<()> {
+        self.memory.remove_table(table_id).await
     }
 
     async fn get_data<'a>(&'a self, view: &View) -> Result<Values2DRef<'a>> {
@@ -307,6 +381,7 @@ fn backend_error(context: &str, error: impl Display) -> SheetahError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::backend::TableSummary;
     use crate::table::TableName;
 
     fn options(path: &Path) -> BackendOptions {
@@ -380,6 +455,153 @@ mod tests {
 
         reloaded.destroy().await?;
         assert!(!path.exists());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn sqlite_backend_lists_persisted_tables() -> Result<()> {
+        let path = test_path("list");
+        let _ = std::fs::remove_file(&path);
+
+        let mut backend = SqliteBackend::new(options(&path));
+        backend.setup().await?;
+        let beta = sheet("Beta")?;
+        let beta_id = beta.id();
+        let alpha = sheet("Alpha")?;
+        let alpha_id = alpha.id();
+        backend.insert(beta_id, beta).await?;
+        backend.insert(alpha_id, alpha).await?;
+        backend.flush().await?;
+        drop(backend);
+
+        let mut reloaded = SqliteBackend::new(options(&path));
+        reloaded.setup().await?;
+        assert_eq!(
+            reloaded.list_tables().await?,
+            vec![
+                TableSummary {
+                    id: alpha_id,
+                    name: "Alpha".to_string(),
+                },
+                TableSummary {
+                    id: beta_id,
+                    name: "Beta".to_string(),
+                },
+            ]
+        );
+
+        reloaded.destroy().await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn sqlite_backend_persists_rename_under_original_id() -> Result<()> {
+        let path = test_path("rename");
+        let _ = std::fs::remove_file(&path);
+
+        let mut backend = SqliteBackend::new(options(&path));
+        backend.setup().await?;
+        let first = sheet("Sheet1")?;
+        let first_id = first.id();
+        let second = sheet("Sheet2")?;
+        let second_id = second.id();
+        backend.insert(first_id, first).await?;
+        backend.insert(second_id, second).await?;
+        backend.rename_table(first_id, "Budget".to_string()).await?;
+        backend.flush().await?;
+        drop(backend);
+
+        let mut reloaded = SqliteBackend::new(options(&path));
+        reloaded.setup().await?;
+        assert_eq!(
+            reloaded.list_tables().await?,
+            vec![
+                TableSummary {
+                    id: first_id,
+                    name: "Budget".to_string(),
+                },
+                TableSummary {
+                    id: second_id,
+                    name: "Sheet2".to_string(),
+                },
+            ]
+        );
+        assert_eq!(reloaded.snapshot(&first_id).await?.len(), 2);
+
+        reloaded.destroy().await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn sqlite_backend_persists_table_removal() -> Result<()> {
+        let path = test_path("remove");
+        let _ = std::fs::remove_file(&path);
+
+        let mut backend = SqliteBackend::new(options(&path));
+        backend.setup().await?;
+        let removed = sheet("Sheet1")?;
+        let removed_id = removed.id();
+        let kept = sheet("Sheet2")?;
+        let kept_id = kept.id();
+        backend.insert(removed_id, removed).await?;
+        backend.insert(kept_id, kept).await?;
+        backend
+            .set_data(
+                removed_id,
+                &Pos {
+                    column: Index::new(0),
+                    row: Index::new(0),
+                },
+                Values2D::new(Index::new(1), Index::new(1), vec![Box::new(7i32)])?,
+            )
+            .await?;
+        backend.remove_table(removed_id).await?;
+        backend.flush().await?;
+        drop(backend);
+
+        let mut reloaded = SqliteBackend::new(options(&path));
+        reloaded.setup().await?;
+        assert_eq!(
+            reloaded.list_tables().await?,
+            vec![TableSummary {
+                id: kept_id,
+                name: "Sheet2".to_string(),
+            }]
+        );
+        assert!(reloaded.snapshot(&removed_id).await.is_err());
+        assert_eq!(reloaded.snapshot(&kept_id).await?.len(), 2);
+
+        reloaded.destroy().await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn sqlite_backend_persists_active_table_selection() -> Result<()> {
+        let path = test_path("active");
+        let _ = std::fs::remove_file(&path);
+
+        let mut backend = SqliteBackend::new(options(&path));
+        backend.setup().await?;
+        assert_eq!(backend.active_table().await?, None);
+
+        let table = sheet("Sheet1")?;
+        let id = table.id();
+        backend.insert(id, table).await?;
+        backend.flush().await?;
+        backend.set_active_table(Some(id)).await?;
+        drop(backend);
+
+        let mut reloaded = SqliteBackend::new(options(&path));
+        reloaded.setup().await?;
+        assert_eq!(reloaded.active_table().await?, Some(id));
+
+        reloaded.set_active_table(None).await?;
+        drop(reloaded);
+
+        let mut cleared = SqliteBackend::new(options(&path));
+        cleared.setup().await?;
+        assert_eq!(cleared.active_table().await?, None);
+        cleared.destroy().await?;
         Ok(())
     }
 
