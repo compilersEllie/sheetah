@@ -52,6 +52,16 @@
 - Cross-platform desktop + CLI/TUI.
 - Rust compile-time safety, good error messages.
 
+### Running the MVP
+
+The SQLite-backed spreadsheet MVP lives in the `sheetah-gpui` crate. Run it from the workspace root:
+
+```bash
+cargo run -p sheetah-gpui
+```
+
+It opens a single editable grid backed by `sheetah.sqlite` in the working directory. See
+[`docs/spreadsheet_mvp.md`](docs/spreadsheet_mvp.md) for controls, scope, and validation.
 
 # Linux Dependencies (from zed's gpui-fast)
 
