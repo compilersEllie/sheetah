@@ -19,6 +19,7 @@ mod tests {
 
         dim.add(Some(0), 2)?;
         // [2, 1]
+        assert_eq!(dim.order(), &[2, 1]);
         assert_eq!(dim.len(), Index::new(2));
 
         Ok(())

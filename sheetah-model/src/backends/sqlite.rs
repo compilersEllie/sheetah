@@ -252,6 +252,9 @@ impl Backend for SqliteBackend {
                     .table_data()
                     .get(id)
                     .ok_or(SheetahError::TableNotFound(*id))?;
+                if data.columns().raw() == 0 {
+                    continue;
+                }
                 for row in 0..data.rows().raw() {
                     for column in 0..data.columns().raw() {
                         let value_json =
@@ -271,7 +274,6 @@ impl Backend for SqliteBackend {
     }
 
     async fn destroy(&mut self) -> Result<()> {
-        self.memory = InMemoryBackend::new(self.options.clone());
         let mut connection = self
             .connection
             .lock()
@@ -283,6 +285,7 @@ impl Backend for SqliteBackend {
             std::fs::remove_file(path)
                 .map_err(|error| backend_error("remove sqlite database", error))?;
         }
+        self.memory = InMemoryBackend::new(self.options.clone());
         Ok(())
     }
 }
@@ -351,11 +354,7 @@ mod tests {
                     column: Index::new(1),
                     row: Index::new(0),
                 },
-                Values2D::new(
-                    Index::new(1),
-                    Index::new(1),
-                    vec![Box::new("hello".to_string())],
-                )?,
+                Values2D::new(Index::new(1), Index::new(1), vec![Box::new(42i32)])?,
             )
             .await?;
         backend
@@ -375,12 +374,27 @@ mod tests {
 
         let snapshot = reloaded.snapshot(&id).await?;
         assert_eq!(snapshot.len(), 3);
-        assert_eq!(snapshot[0][1], "hello");
+        assert_eq!(snapshot[0][1], "42");
         assert_eq!(snapshot[2][0], "left");
         assert_eq!(snapshot[2][1], "right");
 
         reloaded.destroy().await?;
         assert!(!path.exists());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn sqlite_backend_flushes_unnamed_table() -> Result<()> {
+        let path = test_path("empty");
+        let _ = std::fs::remove_file(&path);
+
+        let mut backend = SqliteBackend::new(options(&path));
+        backend.setup().await?;
+        let table = Table::unnamed();
+        let id = table.id();
+        backend.insert(id, table).await?;
+        backend.flush().await?;
+        backend.destroy().await?;
         Ok(())
     }
 }
