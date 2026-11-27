@@ -206,7 +206,7 @@ impl Value for Option<Box<dyn Value>> {
     }
 
     fn cloned(&self) -> Box<dyn Value> {
-        Box::new((self as &dyn Value).cloned())
+        Box::new(self.as_ref().map(|value| value.cloned()))
     }
 
     fn bytes(&self) -> Vec<u8> {

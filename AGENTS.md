@@ -15,6 +15,7 @@ Run from the workspace root:
 - Build: `cargo build --locked --verbose`
 - Release build: `cargo build --release --locked --verbose`
 - Test: `cargo test --locked --verbose`
+- Coverage (`sheetah-model`): `cargo tarpaulin -p sheetah-model --locked --out Stdout --engine llvm`
 - Lint: `cargo clippy --all-features -- -D warnings`
 - Format check: `cargo fmt --all -- --check`
 
