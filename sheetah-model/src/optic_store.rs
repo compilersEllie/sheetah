@@ -1,6 +1,6 @@
+use crate::optic::{ErasedOptic, OpticId, OpticKind};
 use std::any::TypeId;
 use std::collections::{BTreeSet, HashMap};
-use crate::optic::{ErasedOptic, Optic, OpticId, OpticKind};
 
 #[derive(Default)]
 pub struct OpticStore {
@@ -26,18 +26,21 @@ impl OpticStore {
     }
 
     pub fn add_optics(&mut self, kind: &OpticKind) {
-        let optics = (kind.create)();
+        let optics = (kind.create_optics)();
         for optic in optics {
-            let id = OpticId { id: self.optic_by_id.len() as u128 };
+            let id = OpticId {
+                id: self.optic_by_id.len() as u128,
+            };
+            let in_type_id = optic.in_type_id;
+            let out_type_id = optic.out_type_id;
             self.optic_by_id.push(optic);
-            self.optic_by_name
-                .insert((kind.name.to_string(), id));
+            self.optic_by_name.insert((kind.name.to_string(), id));
             self.optic_by_in_type
-                .entry(optic.in_type_id)
+                .entry(in_type_id)
                 .or_default()
                 .push(id);
             self.optic_by_out_type
-                .entry(optic.out_type_id)
+                .entry(out_type_id)
                 .or_default()
                 .push(id);
         }
@@ -52,7 +55,7 @@ impl OpticStore {
     }
 
     pub fn get_by_id(&self, id: OpticId) -> Option<ErasedOptic> {
-        self.optics.get(id.id as usize).cloned()
+        self.optic_by_id.get(id.id as usize).cloned()
     }
 
     pub fn get_by_in_type<T: 'static>(&self) -> Vec<ErasedOptic> {
@@ -82,18 +85,10 @@ impl OpticStore {
     /// Finds all optics that can be composed BEFORE the given optic.
     /// i.e., optics whose 'out' type matches the 'in' type of the given optic.
     pub fn find_composable_before(&self, other: &ErasedOptic) -> Vec<ErasedOptic> {
-        let in_type_id = other.in_type_id();
+        let in_type_id = other.in_type_id;
         self.optic_by_out_type
             .get(&in_type_id)
             .map(|ids| ids.iter().filter_map(|id| self.get_by_id(*id)).collect())
             .unwrap_or_default()
     }
 }
-
-#[derive(Clone, Copy)]
-pub struct OpticKind {
-    pub name: &'static str,
-    pub create_optics: fn() -> Vec<ErasedOptic>,
-}
-
-inventory::collect!(OpticKind);
