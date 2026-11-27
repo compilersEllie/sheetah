@@ -361,8 +361,10 @@ mod tests {
     #[tokio::test]
     async fn workspace_backend_kinds() -> Result<()> {
         let workspace = Workspace::new();
+        let mut kinds = workspace.list_backend_kinds().await;
+        kinds.sort();
         assert_eq!(
-            workspace.list_backend_kinds().await,
+            kinds,
             vec!["In Memory (volatile)".to_string(), "SQLite".to_string(),]
         );
         Ok(())
