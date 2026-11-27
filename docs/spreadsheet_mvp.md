@@ -49,6 +49,7 @@ A committed edit, `Add row`, and `Add column` also flush immediately. Text that 
 - Forms, LoqSeq character sheets, Borg backup, packaging.
 - CLI/TUI, multiple tables, backends, or workspaces, schema/query console.
 - CSV import/export and Postgres persistence (backend stubs only).
+- Recomputing `TableId` after schema growth; the grid keeps the first persisted identifier.
 - Rich text, cell formatting, undo/redo, deleting or resizing rows/columns.
 
 ## Validation
