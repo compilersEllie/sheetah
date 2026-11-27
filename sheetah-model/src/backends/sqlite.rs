@@ -6,33 +6,39 @@ use crate::shape::FieldId;
 use crate::table::{Table, TableId};
 use crate::value::{Value, Values, Values2D, Values2DRef};
 use async_trait::async_trait;
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use sqlx::{Row, SqlitePool};
+use rusqlite::{Connection, params};
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::sync::RwLock;
+
+const SCHEMA: &str = "
+CREATE TABLE IF NOT EXISTS tables (
+    id TEXT PRIMARY KEY,
+    table_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS cells (
+    table_id TEXT NOT NULL,
+    row INTEGER NOT NULL,
+    col INTEGER NOT NULL,
+    value_json TEXT NOT NULL,
+    PRIMARY KEY (table_id, row, col)
+);
+";
 
 #[derive(Debug)]
 pub struct SqliteBackend {
     options: BackendOptions,
     memory: InMemoryBackend,
-    pool: SqlitePool,
+    connection: Mutex<Option<Connection>>,
 }
 
 impl SqliteBackend {
     pub fn new(options: BackendOptions) -> Self {
-        let sqlite_options = SqliteConnectOptions::new()
-            .filename(database_path(&options.relative_path))
-            .create_if_missing(true);
-        let pool = SqlitePoolOptions::new()
-            .max_connections(1)
-            .connect_lazy_with(sqlite_options);
-
         Self {
             memory: InMemoryBackend::new(options.clone()),
             options,
-            pool,
+            connection: Mutex::new(None),
         }
     }
 
@@ -128,77 +134,82 @@ impl Backend for SqliteBackend {
     async fn setup(&mut self) -> Result<()> {
         let path = database_path(&self.options.relative_path);
         if let Some(parent) = path.parent() {
-            tokio::fs::create_dir_all(parent)
-                .await
+            std::fs::create_dir_all(parent)
                 .map_err(|error| backend_error("create backend directory", error))?;
         }
 
-        for statement in [
-            "CREATE TABLE IF NOT EXISTS tables (
-                id TEXT PRIMARY KEY,
-                table_json TEXT NOT NULL
-            )",
-            "CREATE TABLE IF NOT EXISTS cells (
-                table_id TEXT NOT NULL,
-                row INTEGER NOT NULL,
-                col INTEGER NOT NULL,
-                value_json TEXT NOT NULL,
-                PRIMARY KEY (table_id, row, col)
-            )",
-        ] {
-            sqlx::query(statement)
-                .execute(&self.pool)
-                .await
-                .map_err(|error| backend_error("create sqlite schema", error))?;
-        }
-
         self.memory = InMemoryBackend::new(self.options.clone());
-        let records = sqlx::query("SELECT id, table_json FROM tables")
-            .fetch_all(&self.pool)
-            .await
-            .map_err(|error| backend_error("load sqlite tables", error))?;
+        let loaded = {
+            let mut connection = self
+                .connection
+                .lock()
+                .map_err(|_| backend_error("lock sqlite connection", "poisoned lock"))?;
+            if connection.is_none() {
+                *connection = Some(
+                    Connection::open(&path)
+                        .map_err(|error| backend_error("open sqlite database", error))?,
+                );
+            }
+            let sqlite = connection
+                .as_mut()
+                .ok_or_else(|| backend_error("open sqlite database", "no connection"))?;
+            sqlite
+                .execute_batch(SCHEMA)
+                .map_err(|error| backend_error("create sqlite schema", error))?;
 
-        for record in records {
-            let id_text: String = record
-                .try_get("id")
-                .map_err(|error| backend_error("read table id", error))?;
-            let table_json: String = record
-                .try_get("table_json")
-                .map_err(|error| backend_error("read table json", error))?;
-            let id = TableId::new(
-                id_text
-                    .parse()
-                    .map_err(|error| backend_error("parse table id", error))?,
-            );
-            let table: Table = serde_json::from_str(&table_json)
-                .map_err(|error| backend_error("parse table json", error))?;
+            let tables: Vec<(String, String)> = {
+                let mut statement = sqlite
+                    .prepare("SELECT id, table_json FROM tables")
+                    .map_err(|error| backend_error("prepare sqlite tables", error))?;
+                statement
+                    .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+                    .map_err(|error| backend_error("load sqlite tables", error))?
+                    .collect::<rusqlite::Result<_>>()
+                    .map_err(|error| backend_error("read sqlite tables", error))?
+            };
+
+            let mut loaded = Vec::new();
+            for (id_text, table_json) in tables {
+                let id = TableId::new(
+                    id_text
+                        .parse()
+                        .map_err(|error| backend_error("parse table id", error))?,
+                );
+                let table: Table = serde_json::from_str(&table_json)
+                    .map_err(|error| backend_error("parse table json", error))?;
+                let cells: Vec<(i64, i64, String)> = {
+                    let mut statement = sqlite
+                    .prepare(
+                        "SELECT row, col, value_json FROM cells WHERE table_id = ? ORDER BY row, col",
+                    )
+                    .map_err(|error| backend_error("prepare sqlite cells", error))?;
+                    statement
+                        .query_map(params![&id_text], |row| {
+                            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+                        })
+                        .map_err(|error| backend_error("load sqlite cells", error))?
+                        .collect::<rusqlite::Result<_>>()
+                        .map_err(|error| backend_error("read sqlite cells", error))?
+                };
+                let mut values = Vec::with_capacity(cells.len());
+                for (row, column, value_json) in cells {
+                    let value: Box<dyn Value> = serde_json::from_str(&value_json)
+                        .map_err(|error| backend_error("parse cell json", error))?;
+                    values.push((row, column, value));
+                }
+                loaded.push((id, table, values));
+            }
+            loaded
+        };
+
+        for (id, table, values) in loaded {
             self.memory.insert(id, table).await?;
-
-            let cells = sqlx::query(
-                "SELECT row, col, value_json FROM cells WHERE table_id = ? ORDER BY row, col",
-            )
-            .bind(&id_text)
-            .fetch_all(&self.pool)
-            .await
-            .map_err(|error| backend_error("load sqlite cells", error))?;
-
             let data = self
                 .memory
                 .table_data_mut()
                 .get_mut(&id)
-                .ok_or_else(|| SheetahError::TableNotFound(id))?;
-            for cell in cells {
-                let row: i64 = cell
-                    .try_get("row")
-                    .map_err(|error| backend_error("read cell row", error))?;
-                let column: i64 = cell
-                    .try_get("col")
-                    .map_err(|error| backend_error("read cell column", error))?;
-                let value_json: String = cell
-                    .try_get("value_json")
-                    .map_err(|error| backend_error("read cell json", error))?;
-                let value: Box<dyn Value> = serde_json::from_str(&value_json)
-                    .map_err(|error| backend_error("parse cell json", error))?;
+                .ok_or(SheetahError::TableNotFound(id))?;
+            for (row, column, value) in values {
                 data.set(Index::new(column as u32), Index::new(row as u32), value)?;
             }
         }
@@ -206,67 +217,72 @@ impl Backend for SqliteBackend {
     }
 
     async fn flush(&mut self) -> Result<()> {
-        let mut tx = self
-            .pool
-            .begin()
-            .await
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| backend_error("lock sqlite connection", "poisoned lock"))?;
+        let sqlite = connection
+            .as_mut()
+            .ok_or_else(|| backend_error("flush sqlite database", "backend is not set up"))?;
+        let transaction = sqlite
+            .transaction()
             .map_err(|error| backend_error("begin sqlite transaction", error))?;
+        transaction
+            .execute_batch("DELETE FROM cells; DELETE FROM tables;")
+            .map_err(|error| backend_error("clear sqlite state", error))?;
 
-        for statement in ["DELETE FROM cells", "DELETE FROM tables"] {
-            sqlx::query(statement)
-                .execute(&mut *tx)
-                .await
-                .map_err(|error| backend_error("clear sqlite state", error))?;
-        }
+        {
+            let mut table_statement = transaction
+                .prepare("INSERT INTO tables (id, table_json) VALUES (?, ?)")
+                .map_err(|error| backend_error("prepare sqlite table insert", error))?;
+            let mut cell_statement = transaction
+                .prepare("INSERT INTO cells (table_id, row, col, value_json) VALUES (?, ?, ?, ?)")
+                .map_err(|error| backend_error("prepare sqlite cell insert", error))?;
 
-        for (id, table) in self.memory.tables() {
-            let id_text = id.raw().to_string();
-            let table_json = serde_json::to_string(table)
-                .map_err(|error| backend_error("encode table json", error))?;
-            sqlx::query("INSERT INTO tables (id, table_json) VALUES (?, ?)")
-                .bind(&id_text)
-                .bind(table_json)
-                .execute(&mut *tx)
-                .await
-                .map_err(|error| backend_error("store sqlite table", error))?;
+            for (id, table) in self.memory.tables() {
+                let id_text = id.raw().to_string();
+                let table_json = serde_json::to_string(table)
+                    .map_err(|error| backend_error("encode table json", error))?;
+                table_statement
+                    .execute(params![&id_text, table_json])
+                    .map_err(|error| backend_error("store sqlite table", error))?;
 
-            let data = self
-                .memory
-                .table_data()
-                .get(id)
-                .ok_or_else(|| SheetahError::TableNotFound(*id))?;
-            for row in 0..data.rows().raw() {
-                for column in 0..data.columns().raw() {
-                    let value_json =
-                        serde_json::to_string(data.get(Index::new(column), Index::new(row))?)
-                            .map_err(|error| backend_error("encode cell json", error))?;
-                    sqlx::query(
-                        "INSERT INTO cells (table_id, row, col, value_json) VALUES (?, ?, ?, ?)",
-                    )
-                    .bind(&id_text)
-                    .bind(row as i64)
-                    .bind(column as i64)
-                    .bind(value_json)
-                    .execute(&mut *tx)
-                    .await
-                    .map_err(|error| backend_error("store sqlite cell", error))?;
+                let data = self
+                    .memory
+                    .table_data()
+                    .get(id)
+                    .ok_or(SheetahError::TableNotFound(*id))?;
+                for row in 0..data.rows().raw() {
+                    for column in 0..data.columns().raw() {
+                        let value_json =
+                            serde_json::to_string(data.get(Index::new(column), Index::new(row))?)
+                                .map_err(|error| backend_error("encode cell json", error))?;
+                        cell_statement
+                            .execute(params![&id_text, row as i64, column as i64, value_json])
+                            .map_err(|error| backend_error("store sqlite cell", error))?;
+                    }
                 }
             }
         }
 
-        tx.commit()
-            .await
+        transaction
+            .commit()
             .map_err(|error| backend_error("commit sqlite transaction", error))
     }
 
     async fn destroy(&mut self) -> Result<()> {
+        self.memory = InMemoryBackend::new(self.options.clone());
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| backend_error("lock sqlite connection", "poisoned lock"))?;
+        drop(connection.take());
+
         let path = database_path(&self.options.relative_path);
         if path.exists() {
-            tokio::fs::remove_file(path)
-                .await
+            std::fs::remove_file(path)
                 .map_err(|error| backend_error("remove sqlite database", error))?;
         }
-        self.memory = InMemoryBackend::new(self.options.clone());
         Ok(())
     }
 }

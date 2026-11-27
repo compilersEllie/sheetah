@@ -15,7 +15,7 @@ stable-hash = "0.4.3"
 tokio = { version = "1.53.3", features = ["macros", "rt-multi-thread", "sync"] }
 typetag = "0.2.23"
 serde_json = "1.0.154"
-sqlx = { version = "0.9.1", default-features = false, features = ["sqlite", "runtime-tokio"] }
+rusqlite = { version = "0.43.0", features = ["bundled"] }
 
 [dev-dependencies]
 proptest = "1.4.0"
