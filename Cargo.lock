@@ -4585,7 +4585,6 @@ version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f6fa277c67e6ea590466f04c3fe82cb509f0864fe470643e5570de9514a9b11"
 dependencies = [
- "chacha20",
  "getrandom 0.4.3",
  "rand_core 0.10.1",
 ]
@@ -5213,10 +5212,8 @@ dependencies = [
 name = "sheetah-gpui"
 version = "0.1.0"
 dependencies = [
- "futures",
  "gpui-fast",
  "gpui-fast-platform",
- "rand 0.10.4",
  "sheetah-model",
  "tokio",
 ]
