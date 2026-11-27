@@ -189,6 +189,7 @@ impl Workspace {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::backend::TableSummary;
     use crate::editor::{Index, Pos, View};
     use crate::value::{Values, Values2D, Values2DRef};
     use async_trait::async_trait;
@@ -275,6 +276,36 @@ mod tests {
             }
             self.tables.insert(table_id, table);
             Ok(())
+        }
+
+        async fn list_tables(&self) -> Result<Vec<TableSummary>> {
+            Ok(self
+                .tables
+                .iter()
+                .map(|(id, table)| TableSummary {
+                    id: *id,
+                    name: table.display_name().to_string(),
+                })
+                .collect())
+        }
+
+        async fn rename_table(&mut self, table_id: TableId, name: String) -> Result<()> {
+            let table = self
+                .tables
+                .get_mut(&table_id)
+                .ok_or(SheetahError::TableNotFound(table_id))?;
+            table.name = Some(crate::table::TableName {
+                name: Some(name),
+                clash: 0,
+            });
+            Ok(())
+        }
+
+        async fn remove_table(&mut self, table_id: TableId) -> Result<()> {
+            self.tables
+                .remove(&table_id)
+                .map(|_| ())
+                .ok_or(SheetahError::TableNotFound(table_id))
         }
 
         async fn get_data<'a>(&'a self, _view: &View) -> Result<Values2DRef<'a>> {

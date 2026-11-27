@@ -14,6 +14,12 @@ pub struct TableName {
 
 impl_stable_hash!(TableName { name, clash });
 
+impl TableName {
+    pub fn display_name(&self) -> &str {
+        self.name.as_deref().unwrap_or("Untitled")
+    }
+}
+
 #[derive(
     Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, serde::Serialize, serde::Deserialize,
 )]
@@ -73,6 +79,13 @@ impl Table {
 
     pub fn name(&self) -> &Option<TableName> {
         &self.name
+    }
+
+    pub fn display_name(&self) -> &str {
+        self.name
+            .as_ref()
+            .map(TableName::display_name)
+            .unwrap_or("Untitled")
     }
 
     #[inline]

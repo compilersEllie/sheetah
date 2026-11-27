@@ -19,6 +19,12 @@ pub struct BackendOptions {
     pub relative_path: PathBuf,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TableSummary {
+    pub id: TableId,
+    pub name: String,
+}
+
 #[derive(Clone)]
 pub struct BackendKind {
     pub name: &'static str,
@@ -37,6 +43,9 @@ pub trait Backend: Debug + Send + Sync {
     async fn get<'a>(&'a self, table_id: &TableId) -> Result<&'a Table>;
     async fn get_mut<'a>(&'a mut self, table_id: &TableId) -> Result<&'a mut Table>;
     async fn insert(&mut self, table_id: TableId, table: Table) -> Result<()>;
+    async fn list_tables(&self) -> Result<Vec<TableSummary>>;
+    async fn rename_table(&mut self, table_id: TableId, name: String) -> Result<()>;
+    async fn remove_table(&mut self, table_id: TableId) -> Result<()>;
 
     async fn get_data<'a>(&'a self, view: &View) -> Result<Values2DRef<'a>>;
 

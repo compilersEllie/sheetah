@@ -1,8 +1,8 @@
-use crate::backend::{Backend, BackendKind, BackendOptions};
+use crate::backend::{Backend, BackendKind, BackendOptions, TableSummary};
 use crate::editor::{Index, Pos, View};
 use crate::error::{Result, SheetahError};
 use crate::shape::FieldId;
-use crate::table::{Table, TableId};
+use crate::table::{Table, TableId, TableName};
 use crate::value::{Value, Values, Values2D, Values2DRef};
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -74,6 +74,49 @@ impl Backend for InMemoryBackend {
             return Err(SheetahError::TableNotFound(*table_id));
         };
         Ok(table_info)
+    }
+
+    async fn list_tables(&self) -> Result<Vec<TableSummary>> {
+        let mut summaries: Vec<_> = self
+            .tables
+            .iter()
+            .map(|(id, table)| TableSummary {
+                id: *id,
+                name: table.display_name().to_string(),
+            })
+            .collect();
+        summaries.sort_by(|left, right| {
+            left.name
+                .cmp(&right.name)
+                .then_with(|| left.id.raw().cmp(&right.id.raw()))
+        });
+        Ok(summaries)
+    }
+
+    async fn rename_table(&mut self, table_id: TableId, name: String) -> Result<()> {
+        let proposed = TableName {
+            name: Some(name),
+            clash: 0,
+        };
+        if self.tables.iter().any(|(id, table)| {
+            *id != table_id && table.display_name() == proposed.display_name()
+        }) {
+            return Err(SheetahError::DuplicateTable(Some(proposed)));
+        }
+        let table = self
+            .tables
+            .get_mut(&table_id)
+            .ok_or(SheetahError::TableNotFound(table_id))?;
+        table.name = Some(proposed);
+        Ok(())
+    }
+
+    async fn remove_table(&mut self, table_id: TableId) -> Result<()> {
+        if self.tables.remove(&table_id).is_none() {
+            return Err(SheetahError::TableNotFound(table_id));
+        }
+        self.table_data.remove(&table_id);
+        Ok(())
     }
 
     async fn get_data(&self, view: &View) -> Result<Values2DRef> {
@@ -225,7 +268,9 @@ impl Backend for InMemoryBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::backend::TableSummary;
     use crate::editor::Rect;
+    use crate::table::TableName;
     use std::path::PathBuf;
 
     fn setup_backend() -> InMemoryBackend {
@@ -282,6 +327,132 @@ mod tests {
         let backend = setup_backend();
         let result = backend.get(&TableId::new(999)).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn lists_tables_in_display_name_order() -> Result<()> {
+        let mut backend = setup_backend();
+        let alpha_id = TableId::new(1);
+        let beta_id = TableId::new(2);
+        backend
+            .insert(
+                alpha_id,
+                Table::named(TableName {
+                    name: Some("Alpha".to_string()),
+                    clash: 0,
+                }),
+            )
+            .await?;
+        backend
+            .insert(
+                beta_id,
+                Table::named(TableName {
+                    name: Some("Beta".to_string()),
+                    clash: 0,
+                }),
+            )
+            .await?;
+
+        assert_eq!(
+            backend.list_tables().await?,
+            vec![
+                TableSummary {
+                    id: alpha_id,
+                    name: "Alpha".to_string(),
+                },
+                TableSummary {
+                    id: beta_id,
+                    name: "Beta".to_string(),
+                },
+            ]
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn rename_preserves_id_and_rejects_duplicate_names() -> Result<()> {
+        let mut backend = setup_backend();
+        let first_id = TableId::new(1);
+        let second_id = TableId::new(2);
+        backend
+            .insert(
+                first_id,
+                Table::named(TableName {
+                    name: Some("Sheet1".to_string()),
+                    clash: 0,
+                }),
+            )
+            .await?;
+        backend
+            .insert(
+                second_id,
+                Table::named(TableName {
+                    name: Some("Sheet2".to_string()),
+                    clash: 0,
+                }),
+            )
+            .await?;
+
+        backend.rename_table(first_id, "Budget".to_string()).await?;
+        assert_eq!(backend.get(&first_id).await?.display_name(), "Budget");
+        assert_eq!(
+            backend.list_tables().await?,
+            vec![
+                TableSummary {
+                    id: first_id,
+                    name: "Budget".to_string(),
+                },
+                TableSummary {
+                    id: second_id,
+                    name: "Sheet2".to_string(),
+                },
+            ]
+        );
+
+        let duplicate = backend.rename_table(first_id, "Sheet2".to_string()).await;
+        assert!(matches!(duplicate, Err(SheetahError::DuplicateTable(_))));
+        assert_eq!(backend.get(&first_id).await?.display_name(), "Budget");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn remove_table_drops_it_from_the_public_list() -> Result<()> {
+        let mut backend = setup_backend();
+        let removed_id = TableId::new(1);
+        let kept_id = TableId::new(2);
+        backend
+            .insert(
+                removed_id,
+                Table::named(TableName {
+                    name: Some("Sheet1".to_string()),
+                    clash: 0,
+                }),
+            )
+            .await?;
+        backend
+            .insert(
+                kept_id,
+                Table::named(TableName {
+                    name: Some("Sheet2".to_string()),
+                    clash: 0,
+                }),
+            )
+            .await?;
+
+        backend.remove_table(removed_id).await?;
+        assert_eq!(
+            backend.list_tables().await?,
+            vec![TableSummary {
+                id: kept_id,
+                name: "Sheet2".to_string(),
+            }]
+        );
+        assert!(backend.get(&removed_id).await.is_err());
+        assert!(matches!(
+            backend.remove_table(removed_id).await,
+            Err(SheetahError::TableNotFound(_))
+        ));
+        Ok(())
     }
 
     #[tokio::test]
