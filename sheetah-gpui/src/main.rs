@@ -1233,4 +1233,54 @@ mod tests {
         assert!(!is_valid_table_name(""));
         assert!(!is_valid_table_name("   "));
     }
+
+    /// Opt-in visual capture used to produce PR screenshots.
+    #[test]
+    fn capture_screenshot_when_requested() {
+        let Ok(directory) = std::env::var("SHEETAH_SCREENSHOT_DIR") else {
+            return;
+        };
+        let name =
+            std::env::var("SHEETAH_SCREENSHOT_NAME").unwrap_or_else(|_| "sheetah.png".to_string());
+
+        let mut cx = gpui::HeadlessAppContext::with_platform(
+            gpui_platform::current_platform(true).text_system(),
+            Arc::new(()),
+            gpui_platform::current_headless_renderer,
+        );
+        assert!(cx.update(|app| fonts::load_fonts(app)));
+
+        let window = cx
+            .update(|app| {
+                app.open_window(
+                    WindowOptions {
+                        window_bounds: Some(WindowBounds::Windowed(Bounds {
+                            origin: gpui::point(px(0.), px(0.)),
+                            size: size(px(900.), px(560.)),
+                        })),
+                        titlebar: Some(TitlebarOptions {
+                            title: Some("Sheetah".into()),
+                            appears_transparent: true,
+                            traffic_light_position: None,
+                        }),
+                        app_owns_titlebar_drag: true,
+                        window_decorations: Some(WindowDecorations::Client),
+                        ..Default::default()
+                    },
+                    |_, cx| cx.new(Spreadsheet::new),
+                )
+            })
+            .expect("open screenshot window");
+
+        cx.run_until_parked();
+        cx.update(|app| app.refresh_windows());
+        cx.run_until_parked();
+
+        let screenshot = cx
+            .capture_screenshot(window.into())
+            .expect("render screenshot");
+        screenshot
+            .save(std::path::Path::new(&directory).join(name))
+            .expect("save screenshot");
+    }
 }
