@@ -64,6 +64,7 @@ It opens an editable grid with a sidebar of persisted tables, backed by `sheetah
 working directory, in a window with client-side decorations and a custom `Sheetah` titlebar. See
 [`docs/spreadsheet_mvp.md`](docs/spreadsheet_mvp.md) for controls, scope, and validation, and
 [`docs/multi_table.md`](docs/multi_table.md) for table management, storage, and identity rules.
+See [`docs/screenshots.md`](docs/screenshots.md) for screenshots and how to regenerate them.
 
 # Linux Dependencies (from zed's gpui-fast)
 
